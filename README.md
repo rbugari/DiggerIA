@@ -3,6 +3,12 @@
 ## Overview
 Nexus Discovery is a SaaS platform for automated reverse engineering of data code using AI.
 
+## Documentation
+- [Functional Specification](docs/FUNCTIONAL_SPEC.md)
+- [Release Plan](docs/RELEASE_PLAN.md)
+- [Database Schema](docs/DATABASE_SCHEMA.md)
+- [Roadmap & Known Issues](docs/ROADMAP.md)
+
 ## Prerequisites
 1.  **Python 3.11+**
 2.  **Node.js 18+**

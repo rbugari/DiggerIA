@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { Plus, Loader2, Trash2, RefreshCw, MoreVertical } from 'lucide-react';
 import axios from 'axios';
+import { ModeToggle } from '@/components/mode-toggle';
 
 interface Solution {
   id: string;
@@ -110,13 +111,16 @@ export default function DashboardPage() {
     <div className="p-8">
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-3xl font-bold tracking-tight">Solutions</h1>
-        <Link 
-          href="/solutions/new"
-          className="bg-primary text-primary-foreground px-4 py-2 rounded-md flex items-center gap-2 hover:bg-primary/90 transition-colors shadow-sm"
-        >
-          <Plus size={16} />
-          New Solution
-        </Link>
+        <div className="flex items-center gap-4">
+            <ModeToggle />
+            <Link 
+            href="/solutions/new"
+            className="bg-primary text-primary-foreground px-4 py-2 rounded-md flex items-center gap-2 hover:bg-primary/90 transition-colors shadow-sm"
+            >
+            <Plus size={16} />
+            New Solution
+            </Link>
+        </div>
       </div>
 
       {loading ? (

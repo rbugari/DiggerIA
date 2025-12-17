@@ -38,7 +38,7 @@ async def process_job(job_queue_item):
         if not sol_res.data:
              raise Exception(f"Solution {project_id} not found")
              
-        file_path = sol_res.data["storage_path"]
+        file_path = sol_res.data["storage_path"].strip()
         
         # 3. Pipeline
         # Init Services
@@ -49,16 +49,15 @@ async def process_job(job_queue_item):
         # Unpack
         extract_dir = ""
         print(f"[WORKER] Extracting {file_path}...")
-        if file_path.startswith("http"):
-            extract_dir = storage.clone_repo(file_path)
-        else:
-            extract_dir = storage.download_and_extract(file_path)
+        
+        # Delegate detection to Storage Service (handles both ZIPs and Git URLs)
+        extract_dir = storage.download_and_extract(file_path)
             
         # Walk
         files = list(storage.walk_files(extract_dir))
         
         # Filter relevant files upfront for accurate counting
-        relevant_extensions = ['.sql', '.py', '.xml', '.dtsx', '.json', '.md']
+        relevant_extensions = ['.sql', '.py', '.xml', '.dtsx', '.json', '.md', '.yml', '.yaml']
         files_to_process = [f for f in files if f[2] in relevant_extensions]
         
         total_files = len(files_to_process)

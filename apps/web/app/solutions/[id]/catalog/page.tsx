@@ -10,8 +10,21 @@ import {
   flexRender,
   ColumnDef 
 } from '@tanstack/react-table';
-import { Loader2, Search, Filter, Database, FileText, Activity } from 'lucide-react';
+import { Loader2, Search, Filter, Database, FileText, Activity, Table, Code, Box, Layers } from 'lucide-react';
 import Link from 'next/link';
+
+// Color Mapping (Matches Graph View)
+const NODE_COLORS: Record<string, { bg: string, border: string, text: string }> = {
+  'PIPELINE': { bg: '#f3e8ff', border: '#9333ea', text: '#6b21a8' }, // Purple
+  'PROCESS': { bg: '#f3e8ff', border: '#9333ea', text: '#6b21a8' },
+  'SCRIPT': { bg: '#e0f2fe', border: '#0284c7', text: '#0369a1' }, // Blue
+  'FILE': { bg: '#e0f2fe', border: '#0284c7', text: '#0369a1' },
+  'TABLE': { bg: '#dcfce7', border: '#16a34a', text: '#15803d' }, // Green
+  'VIEW': { bg: '#dcfce7', border: '#16a34a', text: '#15803d' },
+  'DATABASE': { bg: '#ffedd5', border: '#ea580c', text: '#c2410c' }, // Orange
+  'PACKAGE': { bg: '#fee2e2', border: '#ef4444', text: '#b91c1c' }, // Red
+  'DEFAULT': { bg: '#f3f4f6', border: '#9ca3af', text: '#374151' } // Gray
+};
 
 interface CatalogPageProps {
   params: {
@@ -62,26 +75,49 @@ export default function CatalogPage({ params }: CatalogPageProps) {
       accessorKey: 'asset_type',
       header: 'Type',
       cell: info => {
-        const val = info.getValue() as string;
-        let icon = <FileText size={16} className="text-gray-500"/>;
-        if (val === 'TABLE' || val === 'VIEW') icon = <Database size={16} className="text-blue-500"/>;
-        if (val === 'PIPELINE' || val === 'PROCESS') icon = <Activity size={16} className="text-purple-500"/>;
-        return <div className="flex items-center gap-2">{icon} <span className="text-xs font-medium">{val}</span></div>;
+        const val = (info.getValue() as string).toUpperCase();
+        const colors = NODE_COLORS[val] || NODE_COLORS['DEFAULT'];
+        
+        let Icon = FileText;
+        if (val === 'TABLE' || val === 'VIEW') Icon = Table;
+        if (val === 'PIPELINE' || val === 'PROCESS') Icon = Activity;
+        if (val === 'DATABASE') Icon = Database;
+        if (val === 'SCRIPT') Icon = Code;
+        if (val === 'PACKAGE') Icon = Box;
+
+        return (
+            <span 
+                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border"
+                style={{ 
+                    backgroundColor: colors.bg, 
+                    borderColor: colors.border,
+                    color: colors.text 
+                }}
+            >
+                <Icon size={12} />
+                {val}
+            </span>
+        );
       }
     },
     {
       accessorKey: 'name_display',
       header: 'Name',
-      cell: info => <span className="font-medium text-gray-900 dark:text-gray-100">{info.getValue() as string}</span>
+      cell: info => <span className="font-semibold text-gray-900 dark:text-gray-100">{info.getValue() as string}</span>
     },
     {
       accessorKey: 'system',
       header: 'System',
+      cell: info => (
+          <span className="text-xs text-gray-500 font-mono bg-gray-100 px-2 py-1 rounded dark:bg-zinc-800">
+              {info.getValue() as string || 'N/A'}
+          </span>
+      )
     },
     {
       accessorKey: 'created_at',
       header: 'Discovered',
-      cell: info => new Date(info.getValue() as string).toLocaleDateString()
+      cell: info => <span className="text-gray-500 text-xs">{new Date(info.getValue() as string).toLocaleDateString()}</span>
     }
   ];
 
@@ -171,11 +207,16 @@ export default function CatalogPage({ params }: CatalogPageProps) {
                   </td>
                 </tr>
               ) : (
-                table.getRowModel().rows.map(row => (
+                table.getRowModel().rows.map(row => {
+                  const assetType = (row.original.asset_type || 'DEFAULT').toUpperCase();
+                  const colors = NODE_COLORS[assetType] || NODE_COLORS['DEFAULT'];
+                  
+                  return (
                   <tr 
                     key={row.id} 
                     onClick={() => handleRowClick(row.original)}
                     className={`border-b hover:bg-gray-50 dark:hover:bg-zinc-800 cursor-pointer transition-colors ${selectedAsset?.asset_id === row.original.asset_id ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                    style={{ borderLeft: `4px solid ${colors.border}` }}
                   >
                     {row.getVisibleCells().map(cell => (
                       <td key={cell.id} className="px-6 py-4 whitespace-nowrap">
@@ -183,7 +224,7 @@ export default function CatalogPage({ params }: CatalogPageProps) {
                       </td>
                     ))}
                   </tr>
-                ))
+                )})
               )}
             </tbody>
           </table>

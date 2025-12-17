@@ -132,6 +132,10 @@ async def delete_solution(solution_id: str):
         asset_del = supabase.table("asset").delete().eq("project_id", solution_id).execute()
         print(f"Deleted Assets: {len(asset_del.data)}")
         
+        # Step 3.5: Delete Evidence (often overlooked, links to project_id)
+        evidence_del = supabase.table("evidence").delete().eq("project_id", solution_id).execute()
+        print(f"Deleted Evidence: {len(evidence_del.data)}")
+        
         # Step 4: Delete Solution
         res = supabase.from_("solutions").delete().eq("id", solution_id).execute()
         print(f"Supabase Solution Delete Result: {res}")
@@ -210,6 +214,85 @@ async def find_paths(req: PathRequest):
     from .services.graph import get_graph_service
     graph = get_graph_service()
     return graph.find_paths(req.from_id, req.to_id, req.max_hops)
+
+@app.post("/admin/cleanup")
+async def admin_cleanup_database():
+    """
+    NUCLEAR OPTION: Truncates all data tables to reset the system.
+    Requires Service Role Key.
+    """
+    from supabase import create_client
+    from .config import settings
+    
+    # Force Service Role Key
+    if not settings.SUPABASE_SERVICE_ROLE_KEY:
+        raise HTTPException(status_code=500, detail="Service Role Key not configured. Cannot perform admin cleanup.")
+        
+    supabase = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
+    
+    try:
+        print("☢️ STARTING NUCLEAR CLEANUP ☢️")
+        
+        # Order matters for Foreign Keys if cascade is not set
+        tables_to_clean = [
+            "edge_evidence",
+            "edge_index",
+            "job_stage_run",
+            "job_queue",
+            "job_run",
+            "asset_version",
+            "asset",
+            "evidence",
+            "solutions"
+        ]
+        
+        results = {}
+        for table in tables_to_clean:
+            # delete().neq("id", "00000...") is a hack to delete all rows since supabase-py delete() requires a filter
+            # or use rpc if available.
+            # Using neq("id", "00000000-0000-0000-0000-000000000000") assuming UUID PKs
+            
+            # Better: use a dummy condition that is always true or ID is not null
+            # Checking table PK name might be needed but assuming standard ID or UUID logic
+            
+            print(f"Cleaning {table}...")
+            # Using a filter that matches everything usually works like gte created_at 1900...
+            # Or if table has 'id' column:
+            try:
+                if table == "solutions":
+                    res = supabase.table(table).delete().neq("id", "00000000-0000-0000-0000-000000000000").execute()
+                elif table == "edge_evidence":
+                     # composite key, trickier. 
+                     # If we can't delete easily via client, we might need an RPC.
+                     # But let's try assuming we can delete by some column.
+                     # edge_evidence has edge_id.
+                     res = supabase.table(table).delete().neq("edge_id", "00000000-0000-0000-0000-000000000000").execute()
+                elif table == "job_queue":
+                     res = supabase.table(table).delete().neq("id", "00000000-0000-0000-0000-000000000000").execute()
+                elif "id" in ["job_run", "asset", "evidence", "job_stage_run", "edge_index", "asset_version"]:
+                     # These usually have specific PKs
+                     pk_map = {
+                         "job_run": "job_id",
+                         "asset": "asset_id",
+                         "evidence": "evidence_id",
+                         "edge_index": "edge_id",
+                         "asset_version": "asset_version_id",
+                         "job_stage_run": "id"
+                     }
+                     pk = pk_map.get(table, "id")
+                     res = supabase.table(table).delete().neq(pk, "00000000-0000-0000-0000-000000000000").execute()
+                else:
+                     res = {"data": "Skipped/Unknown PK"}
+                     
+                results[table] = len(res.data) if res.data else 0
+            except Exception as table_e:
+                print(f"Error cleaning {table}: {table_e}")
+                results[table] = f"Error: {str(table_e)}"
+
+        return {"status": "cleaned", "details": results}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/solutions/{solution_id}/stats")
 async def get_solution_stats(solution_id: str):

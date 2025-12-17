@@ -1,0 +1,221 @@
+# Database Schema & Entity Relationship Diagram (DER)
+
+Este documento describe el esquema actual de la base de datos de **Nexus Discovery Platform**.
+
+## Diagrama Entidad-Relación (Mermaid)
+
+```mermaid
+erDiagram
+    %% Core SaaS
+    organizations ||--o{ solutions : "has"
+    organizations ||--o{ api_vault : "owns"
+    solutions ||--o{ job_run : "executes"
+    solutions ||--o{ asset : "contains"
+    solutions ||--o{ edge_index : "contains"
+    solutions ||--o{ evidence : "contains (logical)"
+
+    %% Execution
+    job_run ||--o{ job_stage_run : "has steps"
+    job_run ||--|| job_queue : "queued in"
+
+    %% Catalog / Graph
+    asset ||--o{ asset_version : "history"
+    asset ||--o{ edge_index : "source (from)"
+    asset ||--o{ edge_index : "target (to)"
+    
+    edge_index ||--o{ edge_evidence : "supported by"
+    evidence ||--o{ edge_evidence : "supports"
+
+    %% Definitions
+    organizations {
+        uuid id PK
+        text name
+        text tier
+        timestamp created_at
+    }
+
+    solutions {
+        uuid id PK
+        uuid org_id FK
+        text name
+        text storage_path
+        text status
+        jsonb config
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    api_vault {
+        uuid id PK
+        uuid org_id FK
+        text service_name
+        text encrypted_value
+        timestamp created_at
+    }
+
+    job_run {
+        uuid job_id PK
+        uuid project_id FK "Ref: solutions.id"
+        text status
+        int progress_pct
+        text current_stage
+        uuid artifact_id
+        timestamp created_at
+        timestamp started_at
+        timestamp finished_at
+        jsonb error_details
+    }
+
+    job_stage_run {
+        uuid id PK
+        uuid job_id FK
+        text stage_name
+        text status
+        bigint duration_ms
+        jsonb metrics
+    }
+
+    job_queue {
+        uuid id PK
+        uuid job_id FK
+        text status
+        int attempts
+        text last_error
+        timestamp locked_until
+    }
+
+    asset {
+        uuid asset_id PK
+        uuid project_id FK "Ref: solutions.id"
+        text asset_type
+        text name_display
+        text canonical_name
+        text system
+        jsonb tags
+        text owner
+    }
+
+    asset_version {
+        uuid asset_version_id PK
+        uuid asset_id FK
+        text hash
+        text source_file
+        timestamp first_seen_at
+    }
+
+    edge_index {
+        uuid edge_id PK
+        uuid project_id FK "Ref: solutions.id"
+        uuid from_asset_id FK
+        uuid to_asset_id FK
+        text edge_type
+        numeric confidence
+        boolean is_hypothesis
+    }
+
+    evidence {
+        uuid evidence_id PK
+        uuid project_id "Logical FK: solutions.id"
+        text kind
+        text file_path
+        jsonb locator
+        text snippet
+    }
+
+    edge_evidence {
+        uuid edge_id PK,FK
+        uuid evidence_id PK,FK
+    }
+```
+
+## Detalles de Tablas
+
+### 1. Core / SaaS
+
+#### `organizations`
+Entidad raíz para multitenancy.
+- **id**: UUID (PK)
+- **name**: Nombre de la organización.
+- **tier**: Nivel de suscripción ('FREE', 'PRO', 'ENTERPRISE').
+
+#### `solutions`
+Representa un proyecto o "Solución" que se va a analizar.
+- **id**: UUID (PK)
+- **org_id**: FK a `organizations`. Cascade Delete.
+- **name**: Nombre del proyecto.
+- **storage_path**: Ruta al archivo ZIP en Supabase Storage.
+- **status**: Estado general ('DRAFT', 'QUEUED', 'PROCESSING', 'READY', 'ERROR').
+- **config**: JSON con configuración extra (ej. patrones de ignorar).
+
+#### `api_vault`
+Almacén seguro para claves de API de terceros.
+- **id**: UUID (PK)
+- **org_id**: FK a `organizations`.
+- **service_name**: Identificador del servicio ('OPENROUTER', etc).
+- **encrypted_value**: Valor encriptado de la clave.
+
+---
+
+### 2. Motor de Ejecución (Execution Engine)
+
+#### `job_run`
+Registro de una ejecución de análisis para una solución.
+- **job_id**: UUID (PK)
+- **project_id**: FK a `solutions(id)`.
+- **status**: Estado de la ejecución ('queued', 'running', 'completed', 'failed').
+- **progress_pct**: Porcentaje de progreso (0-100).
+- **error_details**: JSON con detalles de errores si falla.
+
+#### `job_stage_run`
+Desglose de la ejecución en etapas (ej. "ingest", "extract", "graph").
+- **id**: UUID (PK)
+- **job_id**: FK a `job_run`.
+- **stage_name**: Nombre de la etapa.
+- **metrics**: JSON con métricas de la etapa (ej. número de archivos procesados).
+
+#### `job_queue`
+Cola simple implementada en SQL para distribuir trabajo a los workers.
+- **id**: UUID (PK)
+- **job_id**: FK a `job_run`.
+- **status**: Estado en cola ('pending', 'processing', 'completed', 'failed').
+- **locked_until**: Timestamp para bloqueo optimista.
+
+---
+
+### 3. Catálogo y Grafo (Catalog & Graph)
+
+#### `asset`
+Representa cualquier nodo en el grafo de conocimiento (Tabla, Archivo, Columna, Proceso, etc.).
+- **asset_id**: UUID (PK).
+- **project_id**: FK a `solutions(id)`.
+- **asset_type**: Tipo de activo ('TABLE', 'FILE', 'PIPELINE', 'SCRIPT').
+- **name_display**: Nombre legible.
+- **canonical_name**: Nombre único/técnico.
+- **system**: Sistema de origen (ej. 'SQLServer', 'SSIS').
+
+#### `edge_index`
+Representa las relaciones (aristas) entre activos.
+- **edge_id**: UUID (PK).
+- **from_asset_id**: FK a `asset` (Origen).
+- **to_asset_id**: FK a `asset` (Destino).
+- **edge_type**: Tipo de relación ('INPUT_OF', 'OUTPUT_TO', 'DEPENDS_ON').
+- **confidence**: Nivel de confianza (0.0 - 1.0).
+
+#### `evidence`
+Evidencia cruda que soporta un hallazgo o relación.
+- **evidence_id**: UUID (PK).
+- **project_id**: ID de la solución (Relación lógica, sin FK estricta en DB).
+- **file_path**: Archivo donde se encontró.
+- **snippet**: Fragmento de código relevante.
+- **locator**: JSON con ubicación precisa (líneas, xpath).
+
+#### `edge_evidence`
+Tabla de unión muchos-a-muchos que vincula una relación (`edge_index`) con las evidencias que la soportan (`evidence`).
+
+---
+
+## Notas Técnicas
+1.  **Legacy**: Existe una tabla `jobs` (definida en `db.sql`) que ha sido reemplazada funcionalmente por `job_run` (definida en migraciones).
+2.  **Foreign Keys**:
+    - La mayoría de las relaciones tienen `ON DELETE CASCADE` configurado (reforzado por `migrations/03_nuclear_fix.sql`), lo que significa que borrar una `Solution` limpiará automáticamente sus `Assets`, `Jobs` y `Edges`.
+    - `evidence.project_id` no tiene una FK estricta en la definición SQL actual, pero lógicamente pertenece a una solución.

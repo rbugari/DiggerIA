@@ -8,6 +8,7 @@ import Link from 'next/link';
 import axios from 'axios';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { ModeToggle } from '@/components/mode-toggle';
 
 export function cn(...inputs: (string | undefined | null | false)[]) {
   return twMerge(clsx(inputs));
@@ -104,9 +105,12 @@ export default function NewSolutionPage() {
 
   return (
     <div className="max-w-2xl mx-auto p-8">
-      <Link href="/dashboard" className="flex items-center text-sm text-gray-500 mb-6 hover:text-gray-900">
-        <ArrowLeft size={16} className="mr-1" /> Back to Dashboard
-      </Link>
+      <div className="flex justify-between items-start mb-6">
+        <Link href="/dashboard" className="flex items-center text-sm text-gray-500 hover:text-gray-900 dark:hover:text-gray-100">
+          <ArrowLeft size={16} className="mr-1" /> Back to Dashboard
+        </Link>
+        <ModeToggle />
+      </div>
       
       <h1 className="text-3xl font-bold mb-2">New Solution</h1>
       <p className="text-gray-600 mb-8">Connect your data sources to start the analysis.</p>

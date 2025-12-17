@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
-import { ArrowLeft, Loader2, RefreshCw, X, FileText, Database, Table, Download, ArrowRightLeft, LayoutGrid, Network, Filter, Settings, Map, ArrowDown, ArrowRight, Focus, Minimize2 } from 'lucide-react';
+import { ArrowLeft, Loader2, RefreshCw, X, FileText, Database, Table, Download, ArrowRightLeft, LayoutGrid, Network, Filter, Settings, Map, ArrowDown, ArrowRight, Focus, Minimize2, CircleDot } from 'lucide-react';
 import ReactFlow, { 
   Node, 
   Edge, 
@@ -21,6 +21,7 @@ import axios from 'axios';
 import dagre from 'dagre';
 import { ChatAssistant } from '@/components/ChatAssistant';
 import CatalogPage from './catalog/page';
+import { ModeToggle } from '@/components/mode-toggle';
 
 interface PageProps {
   params: {
@@ -29,7 +30,46 @@ interface PageProps {
 }
 
 // ... (getLayoutedElements function remains the same) ...
+import { useTheme } from 'next-themes';
+
+// Color Mapping using CSS Variables
+const NODE_COLORS: Record<string, { bg: string, border: string }> = {
+  'PIPELINE': { bg: 'var(--node-pipeline-bg)', border: 'var(--node-pipeline-border)' },
+  'PROCESS': { bg: 'var(--node-pipeline-bg)', border: 'var(--node-pipeline-border)' },
+  'SCRIPT': { bg: 'var(--node-script-bg)', border: 'var(--node-script-border)' },
+  'FILE': { bg: 'var(--node-script-bg)', border: 'var(--node-script-border)' },
+  'TABLE': { bg: 'var(--node-table-bg)', border: 'var(--node-table-border)' },
+  'VIEW': { bg: 'var(--node-table-bg)', border: 'var(--node-table-border)' },
+  'DATABASE': { bg: 'var(--node-db-bg)', border: 'var(--node-db-border)' },
+  'PACKAGE': { bg: 'var(--node-package-bg)', border: 'var(--node-package-border)' },
+  'DEFAULT': { bg: 'var(--node-default-bg)', border: 'var(--node-default-border)' }
+};
+
+const getCircularLayout = (nodes: Node[], edges: Edge[]) => {
+  const centerX = 0;
+  const centerY = 0;
+  const radius = Math.max(nodes.length * 30, 300); // Dynamic radius based on node count
+  const angleStep = (2 * Math.PI) / nodes.length;
+
+  const layoutedNodes = nodes.map((node, index) => {
+    const angle = index * angleStep;
+    return {
+      ...node,
+      position: {
+        x: centerX + radius * Math.cos(angle),
+        y: centerY + radius * Math.sin(angle),
+      },
+    };
+  });
+
+  return { nodes: layoutedNodes, edges };
+};
+
 const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'LR') => {
+  if (direction === 'CIRCULAR') {
+      return getCircularLayout(nodes, edges);
+  }
+
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
 
@@ -69,6 +109,7 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = 'LR') => 
 import { MessageSquare } from 'lucide-react';
 
 function GraphContent({ id, solution }: { id: string, solution: any }) {
+  const { theme } = useTheme();
   const [graphLoading, setGraphLoading] = useState(true);
   const [selectedNode, setSelectedNode] = useState<any>(null);
   const [focusNodeId, setFocusNodeId] = useState<string | null>(null);
@@ -93,7 +134,7 @@ function GraphContent({ id, solution }: { id: string, solution: any }) {
   const { fitView } = useReactFlow();
 
   // Layout Controls
-  const [layoutDirection, setLayoutDirection] = useState<'LR' | 'TB'>('LR');
+  const [layoutDirection, setLayoutDirection] = useState<'LR' | 'TB' | 'CIRCULAR'>('LR');
   const [showMinimap, setShowMinimap] = useState(true);
 
   // 1. Fetch Graph Data
@@ -106,42 +147,29 @@ function GraphContent({ id, solution }: { id: string, solution: any }) {
 
       // Transform nodes for ReactFlow (Initial processing)
       const initialNodes: Node[] = rawNodes.map((n: any) => {
-        let bgColor = '#fff';
-        let borderColor = '#777';
-        let labelColor = '#000';
-
-        // Normalize type to ensure consistency
         const normalizedType = (n.data.type || 'FILE').toUpperCase();
         n.data.type = normalizedType;
 
-        // Color coding by TYPE
+        const colors = NODE_COLORS[normalizedType] || NODE_COLORS['DEFAULT'];
+
+        // Determine Shape based on Type
+        let borderRadius = '8px'; // Default
+        let borderWidth = '2px';
+        
         switch (normalizedType) {
-          case 'PIPELINE':
-          case 'PROCESS':
-            bgColor = '#f3e8ff'; // Purple
-            borderColor = '#9333ea';
-            break;
-          case 'SCRIPT':
-          case 'FILE':
-            bgColor = '#e0f2fe'; // Blue
-            borderColor = '#0284c7';
-            break;
-          case 'TABLE':
-          case 'VIEW':
-            bgColor = '#dcfce7'; // Green
-            borderColor = '#16a34a';
-            break;
-          case 'DATABASE':
-            bgColor = '#ffedd5'; // Orange
-            borderColor = '#ea580c';
-            break;
-          case 'PACKAGE':
-            bgColor = '#fee2e2'; // Red/Pink
-            borderColor = '#ef4444';
-            break;
-          default:
-            bgColor = '#f3f4f6'; // Gray
-            borderColor = '#9ca3af';
+            case 'PIPELINE':
+            case 'PROCESS':
+                borderRadius = '30px'; // Pill shape for processes
+                break;
+            case 'FILE':
+            case 'SCRIPT':
+                borderRadius = '2px'; // Sharp corners for files
+                break;
+            case 'TABLE':
+            case 'VIEW':
+            case 'DATABASE':
+                borderRadius = '8px'; // Standard rounded for data
+                break;
         }
 
         return {
@@ -149,14 +177,14 @@ function GraphContent({ id, solution }: { id: string, solution: any }) {
           position: { x: 0, y: 0 },
           data: { ...n.data, fullData: n },
           style: { 
-            background: bgColor,
-            border: `2px solid ${borderColor}`,
-            borderRadius: '8px',
+            background: colors.bg,
+            border: `${borderWidth} solid ${colors.border}`,
+            borderRadius: borderRadius,
             padding: '12px',
             width: 220,
             fontSize: '12px',
             boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-            color: labelColor,
+            color: '#000',
             fontWeight: '500'
           },
         };
@@ -331,7 +359,9 @@ function GraphContent({ id, solution }: { id: string, solution: any }) {
                  <Filter size={12} /> Filter Nodes
              </div>
              <div className="space-y-1">
-                 {Object.keys(nodeTypesFilter).map(type => (
+                 {Object.keys(nodeTypesFilter).map(type => {
+                     const colors = NODE_COLORS[type] || NODE_COLORS['DEFAULT'];
+                     return (
                      <label key={type} className="flex items-center gap-2 px-2 py-1 hover:bg-muted/50 rounded cursor-pointer text-xs transition-colors">
                          <input 
                             type="checkbox" 
@@ -339,9 +369,10 @@ function GraphContent({ id, solution }: { id: string, solution: any }) {
                             onChange={(e) => setNodeTypesFilter(prev => ({...prev, [type]: e.target.checked}))}
                             className="rounded border-input text-primary focus:ring-primary"
                          />
+                         <span className="w-2 h-2 rounded-full" style={{ backgroundColor: colors.border }}></span>
                          <span className="font-medium text-foreground">{type}</span>
                      </label>
-                 ))}
+                 )})}
              </div>
         </div>
 
@@ -371,6 +402,13 @@ function GraphContent({ id, solution }: { id: string, solution: any }) {
                 >
                     <ArrowDown size={16} />
                 </button>
+                <button 
+                   onClick={() => setLayoutDirection('CIRCULAR')}
+                   className={`p-1.5 rounded hover:bg-muted transition-colors ${layoutDirection === 'CIRCULAR' ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}
+                   title="Circular Layout"
+                >
+                    <CircleDot size={16} />
+                </button>
                 <div className="w-px h-4 bg-border mx-1"></div>
                 <button 
                    onClick={() => setShowMinimap(!showMinimap)}
@@ -382,7 +420,7 @@ function GraphContent({ id, solution }: { id: string, solution: any }) {
             </div>
         </div>
 
-        <div className="flex-1 h-full">
+        <div className="flex-1 h-full bg-[color:var(--graph-bg)] transition-colors duration-300">
             <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -392,19 +430,29 @@ function GraphContent({ id, solution }: { id: string, solution: any }) {
             fitView
             attributionPosition="bottom-right"
             >
-            <Controls />
-            <Background color="#aaa" gap={16} />
+            <Controls className="bg-card border-border fill-foreground text-foreground" />
+            <Background color={theme === 'dark' ? '#334155' : '#aaaaaa'} gap={16} />
             {showMinimap && (
               <MiniMap 
-                style={{ height: 120, width: 160, backgroundColor: 'white', border: '1px solid #e5e7eb' }} 
+                style={{ 
+                    height: 120, 
+                    width: 160, 
+                    backgroundColor: 'var(--card)', 
+                    border: '1px solid var(--border)' 
+                }} 
                 zoomable 
                 pannable 
                 nodeColor={(n) => {
-                  switch (n.data.type) {
-                    case 'PIPELINE': return '#d8b4fe';
-                    case 'TABLE': return '#86efac';
-                    case 'FILE': return '#7dd3fc';
-                    default: return '#e5e7eb';
+                  const type = n.data.type;
+                  // Use computed styles or map to hex for minimap (canvas based)
+                  // Minimap needs explicit colors usually, vars might not work if it uses canvas 2d context directly
+                  // So we map manually based on theme
+                  const isDark = theme === 'dark';
+                  switch (type) {
+                    case 'PIPELINE': return isDark ? '#3b0764' : '#d8b4fe';
+                    case 'TABLE': return isDark ? '#064e3b' : '#86efac';
+                    case 'FILE': return isDark ? '#0c4a6e' : '#7dd3fc';
+                    default: return isDark ? '#1f2937' : '#e5e7eb';
                   }
                 }}
               />
@@ -632,19 +680,22 @@ export default function SolutionDetailPage({ params }: PageProps) {
             </div>
             
             {/* View Switcher */}
-            <div className="flex bg-muted p-1 rounded-md">
-                <button
-                    onClick={() => setViewMode('graph')}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm font-medium transition-all ${viewMode === 'graph' ? 'bg-background text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-                >
-                    <Network size={16} /> Graph
-                </button>
-                <button
-                    onClick={() => setViewMode('catalog')}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm font-medium transition-all ${viewMode === 'catalog' ? 'bg-background text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-                >
-                    <LayoutGrid size={16} /> Catalog
-                </button>
+            <div className="flex items-center gap-2">
+                <ModeToggle />
+                <div className="flex bg-muted p-1 rounded-md">
+                    <button
+                        onClick={() => setViewMode('graph')}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm font-medium transition-all ${viewMode === 'graph' ? 'bg-background text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                    >
+                        <Network size={16} /> Graph
+                    </button>
+                    <button
+                        onClick={() => setViewMode('catalog')}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm font-medium transition-all ${viewMode === 'catalog' ? 'bg-background text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                    >
+                        <LayoutGrid size={16} /> Catalog
+                    </button>
+                </div>
             </div>
         </div>
 
