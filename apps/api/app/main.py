@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from .tasks import analyze_solution_task
 from pydantic import BaseModel
+from .routers import planning
 
 load_dotenv()
 
@@ -16,6 +17,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(planning.router)
 
 class JobRequest(BaseModel):
     solution_id: str
@@ -41,7 +44,8 @@ async def create_job(job: JobRequest):
     job_data = {
         "project_id": job.solution_id,
         "status": "queued",
-        "current_stage": "ingest"
+        "current_stage": "ingest",
+        "requires_approval": True
     }
     # Use job.solution_id as job_id for now? 
     # MD says job_id is UUID. solution_id is UUID.
@@ -158,14 +162,29 @@ async def delete_solution(solution_id: str):
         # But if it's partial failure (e.g. Neo4j down), we might want to return 200 with warning.
         raise HTTPException(status_code=500, detail=str(e))
 
+class ReanalyzeRequest(BaseModel):
+    mode: str = "update" # update | full
+
 @app.post("/solutions/{solution_id}/analyze")
-async def reanalyze_solution(solution_id: str):
+async def reanalyze_solution(solution_id: str, request: ReanalyzeRequest = ReanalyzeRequest(mode="update")):
     from .services.queue import SQLJobQueue
     from supabase import create_client
     from .config import settings
     
     supabase = create_client(settings.SUPABASE_URL, settings.SUPABASE_KEY)
     
+    # Check if full cleanup requested
+    if request.mode == "full":
+        try:
+            print(f"Cleaning previous data for solution {solution_id} (Full Reprocess)...")
+            # Reuse logic from delete_solution but keep solution record
+            supabase.table("job_run").delete().eq("project_id", solution_id).execute()
+            supabase.table("edge_index").delete().eq("project_id", solution_id).execute()
+            supabase.table("asset").delete().eq("project_id", solution_id).execute()
+            supabase.table("evidence").delete().eq("project_id", solution_id).execute()
+        except Exception as e:
+            print(f"Warning during cleanup: {e}")
+
     # Fetch solution to get file_path
     try:
         response = supabase.from_("solutions").select("storage_path").eq("id", solution_id).single().execute()
@@ -176,7 +195,8 @@ async def reanalyze_solution(solution_id: str):
         job_data = {
             "project_id": solution_id,
             "status": "queued",
-            "current_stage": "ingest"
+            "current_stage": "ingest",
+            "requires_approval": True
         }
         res = supabase.table("job_run").insert(job_data).execute()
         new_job_id = res.data[0]["job_id"]
@@ -188,7 +208,7 @@ async def reanalyze_solution(solution_id: str):
         queue = SQLJobQueue()
         queue.enqueue_job(new_job_id)
         
-        return {"status": "queued", "job_id": new_job_id}
+        return {"status": "queued", "job_id": new_job_id, "mode": request.mode}
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -318,24 +338,51 @@ async def get_solution_stats(solution_id: str):
     # Active Job Status (New)
     job_status = None
     # Check if there is a running or queued job
+    # Ensure we are selecting 'job_id' explicitly as 'id' is not in the schema for job_run
     job_res = supabase.table("job_run")\
-        .select("status, progress_pct, error_details, created_at")\
+        .select("job_id, plan_id, status, progress_pct, error_details, created_at, current_stage")\
         .eq("project_id", solution_id)\
-        .in_("status", ["queued", "running"])\
+        .in_("status", ["queued", "running", "planning_ready"])\
         .order("created_at", desc=True)\
         .limit(1)\
         .execute()
         
     if job_res.data:
         job_status = job_res.data[0]
+    else:
+        # Check for completed jobs to ensure we don't miss status if just finished?
+        # No, active job implies currently running/queued. 
+        # But if we want to show "Planning Ready" even if it's not strictly "running" (it's paused),
+        # we need to ensure 'planning_ready' is included (which I did).
+        pass
     
+    # DEBUG: Print status for troubleshooting
+    if job_status:
+        print(f"DEBUG: Active Job for {solution_id}: {job_status['status']} (Plan: {job_status.get('plan_id')})")
+    else:
+        print(f"DEBUG: No active job for {solution_id}")
+
+    # Last Completed Job
+    last_run = None
+    last_run_res = supabase.table("job_run")\
+        .select("finished_at")\
+        .eq("project_id", solution_id)\
+        .eq("status", "completed")\
+        .order("finished_at", desc=True)\
+        .limit(1)\
+        .execute()
+    
+    if last_run_res.data:
+        last_run = last_run_res.data[0]["finished_at"]
+
     return {
         "total_assets": assets_count.count,
         "total_edges": edges_count.count,
         "files": files_count.count,
         "tables": tables_count.count,
         "pipelines": pipelines_count.count,
-        "active_job": job_status
+        "active_job": job_status,
+        "last_run": last_run
     }
 
 @app.get("/solutions/{solution_id}/assets")

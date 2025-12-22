@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ArrowLeft, Loader2, RefreshCw, X, FileText, Database, Table, Download, ArrowRightLeft, LayoutGrid, Network, Filter, Settings, Map, ArrowDown, ArrowRight, Focus, Minimize2, CircleDot } from 'lucide-react';
 import ReactFlow, { 
   Node, 
@@ -623,11 +624,14 @@ function GraphContent({ id, solution }: { id: string, solution: any }) {
 export default function SolutionDetailPage({ params }: PageProps) {
   const { id } = params;
   const [solution, setSolution] = useState<any>(null);
+  const [activeJob, setActiveJob] = useState<any>(null); // New state for active job
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'graph' | 'catalog'>('graph');
+  const router = useRouter(); // For navigation
 
   const fetchSolution = useCallback(async () => {
-    const { data, error } = await supabase
+    // 1. Fetch Solution Details
+    const { data: solutionData, error } = await supabase
       .from('solutions')
       .select('*')
       .eq('id', id)
@@ -636,14 +640,32 @@ export default function SolutionDetailPage({ params }: PageProps) {
     if (error) {
       console.error('Error fetching solution:', error);
     } else {
-      setSolution(data);
+      setSolution(solutionData);
     }
+
+    // 2. Fetch Active Job (for Planning Status)
+    try {
+        const statsRes = await axios.get(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/solutions/${id}/stats`);
+        setActiveJob(statsRes.data.active_job);
+    } catch (e) {
+        console.error("Error fetching stats:", e);
+    }
+
     setLoading(false);
   }, [id]);
 
   useEffect(() => {
     fetchSolution();
-  }, [fetchSolution]);
+    
+    // Polling for status updates if processing or planning
+    const interval = setInterval(() => {
+        if (solution?.status === 'PROCESSING' || activeJob?.status === 'planning_ready') {
+            fetchSolution();
+        }
+    }, 5000);
+    
+    return () => clearInterval(interval);
+  }, [fetchSolution, solution?.status, activeJob?.status]);
 
   if (loading) {
     return (
@@ -657,6 +679,70 @@ export default function SolutionDetailPage({ params }: PageProps) {
     return <div className="p-8">Solution not found</div>;
   }
 
+  // --- PLANNING INTERCEPTION ---
+  // If the active job is in 'planning_ready' state, show the Planning Banner/Redirect
+  if (activeJob && activeJob.status === 'planning_ready') {
+      return (
+          <div className="h-screen flex flex-col items-center justify-center bg-background text-foreground p-8">
+              <div className="max-w-md w-full bg-card border border-border rounded-lg shadow-lg p-6 text-center">
+                  <div className="bg-primary/10 text-primary p-3 rounded-full w-fit mx-auto mb-4">
+                      <FileText size={32} />
+                  </div>
+                  <h1 className="text-2xl font-bold mb-2">Execution Plan Ready</h1>
+                  <p className="text-muted-foreground mb-6">
+                      A new execution plan has been generated for this solution. 
+                      Please review and approve the files to be processed.
+                  </p>
+                  
+                  <div className="flex flex-col gap-3">
+                      <button 
+                          onClick={() => router.push(`/solutions/${id}/plan`)}
+                          className="w-full bg-primary text-primary-foreground hover:bg-primary/90 py-2 rounded-md font-medium transition-colors"
+                      >
+                          Review Plan
+                      </button>
+                      <Link href="/dashboard" className="text-sm text-muted-foreground hover:underline">
+                          Return to Dashboard
+                      </Link>
+                  </div>
+              </div>
+          </div>
+      );
+  }
+  
+  // Define status display logic
+  const getStatusBadge = () => {
+      if (activeJob && activeJob.status === 'planning_ready') {
+          return <span className="px-2 py-0.5 rounded-full font-medium border bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-800">Ready to Approve</span>;
+      }
+      
+      if (solution.status === 'PROCESSING' || solution.status === 'QUEUED') {
+          // Check active job for more detail
+          if (activeJob) {
+              if (activeJob.status === 'queued') return <span className="px-2 py-0.5 rounded-full font-medium border bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-800">Queued</span>;
+              
+              // If running, check stage
+               if (activeJob.current_stage === 'planning') {
+                   return <span className="px-2 py-0.5 rounded-full font-medium border bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800 flex items-center gap-1">
+                       <Loader2 className="animate-spin" size={12} /> Generating Plan...
+                   </span>;
+               }
+               
+               // We should probably assume 'Evaluating Plan' if not ready yet but running
+               return <span className="px-2 py-0.5 rounded-full font-medium border bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800 flex items-center gap-1">
+                   <Loader2 className="animate-spin" size={12} /> Analyzing...
+               </span>;
+          }
+           return <span className="px-2 py-0.5 rounded-full font-medium border bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800">Processing</span>;
+      }
+      
+      if (solution.status === 'READY') {
+          return <span className="px-2 py-0.5 rounded-full font-medium border bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800">Ready</span>;
+      }
+      
+      return <span className="px-2 py-0.5 rounded-full font-medium border bg-secondary text-secondary-foreground border-border">{solution.status}</span>;
+  };
+
   return (
     <div className="h-screen flex flex-col bg-background text-foreground">
         {/* Header */}
@@ -668,12 +754,7 @@ export default function SolutionDetailPage({ params }: PageProps) {
                 <div>
                     <h1 className="font-bold text-lg tracking-tight">{solution.name}</h1>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span className={`px-2 py-0.5 rounded-full font-medium border
-                            ${solution.status === 'READY' ? 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800' : 
-                            solution.status === 'PROCESSING' ? 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800' : 
-                            'bg-secondary text-secondary-foreground border-border'}`}>
-                            {solution.status}
-                        </span>
+                        {getStatusBadge()}
                         <span>{new Date(solution.created_at).toLocaleString()}</span>
                     </div>
                 </div>

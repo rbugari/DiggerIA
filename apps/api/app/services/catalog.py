@@ -34,6 +34,12 @@ class CatalogService:
                 
             if existing.data:
                 asset_id = existing.data[0]["asset_id"]
+                # Update existing asset (Upsert logic)
+                self.supabase.table("asset").update({
+                    "tags": node.attributes,
+                    "updated_at": "now()",
+                    "system": node.system
+                }).eq("asset_id", asset_id).execute()
             else:
                 asset_id = str(uuid.uuid4())
                 asset_data = {
@@ -56,18 +62,35 @@ class CatalogService:
         # 2. Evidences
         evidence_id_map = {}
         for ev in result.evidences:
-            ev_uuid = str(uuid.uuid4())
-            evidence_data = {
-                "evidence_id": ev_uuid,
-                "project_id": project_id,
-                "artifact_id": artifact_id,
-                "file_path": result.meta.get("source_file"),
-                "kind": ev.kind,
-                "locator": ev.locator.model_dump(),
-                "snippet": ev.snippet,
-                "hash": ev.hash
-            }
-            self.supabase.table("evidence").insert(evidence_data).execute()
+            # Check if evidence exists (hash + file + project)? 
+            # For now, simplistic check or just insert (assuming 'Update' might want history)
+            # But to avoid duplicates on re-run, we should check.
+            # Using hash if available
+            existing_ev = None
+            if ev.hash:
+                existing_ev = self.supabase.table("evidence")\
+                    .select("evidence_id")\
+                    .eq("project_id", project_id)\
+                    .eq("hash", ev.hash)\
+                    .eq("file_path", result.meta.get("source_file"))\
+                    .execute()
+            
+            if existing_ev and existing_ev.data:
+                ev_uuid = existing_ev.data[0]["evidence_id"]
+            else:
+                ev_uuid = str(uuid.uuid4())
+                evidence_data = {
+                    "evidence_id": ev_uuid,
+                    "project_id": project_id,
+                    "artifact_id": artifact_id,
+                    "file_path": result.meta.get("source_file"),
+                    "kind": ev.kind,
+                    "locator": ev.locator.model_dump(),
+                    "snippet": ev.snippet,
+                    "hash": ev.hash
+                }
+                self.supabase.table("evidence").insert(evidence_data).execute()
+            
             evidence_id_map[ev.evidence_id] = ev_uuid
 
         # 3. Edges
@@ -78,27 +101,52 @@ class CatalogService:
             if not from_uuid or not to_uuid:
                 continue # Skip if nodes not found
                 
-            edge_uuid = str(uuid.uuid4())
-            edge_data = {
-                "edge_id": edge_uuid,
-                "project_id": project_id,
-                "from_asset_id": from_uuid,
-                "to_asset_id": to_uuid,
-                "edge_type": edge.edge_type,
-                "confidence": edge.confidence,
-                "extractor_id": result.meta.get("extractor_id"),
-                "is_hypothesis": edge.is_hypothesis
-            }
-            self.supabase.table("edge_index").insert(edge_data).execute()
+            # Check existing edge
+            existing_edge = self.supabase.table("edge_index")\
+                .select("edge_id")\
+                .eq("project_id", project_id)\
+                .eq("from_asset_id", from_uuid)\
+                .eq("to_asset_id", to_uuid)\
+                .eq("edge_type", edge.edge_type)\
+                .execute()
+            
+            if existing_edge.data:
+                edge_uuid = existing_edge.data[0]["edge_id"]
+                # Update confidence/metadata
+                self.supabase.table("edge_index").update({
+                    "confidence": edge.confidence,
+                    "is_hypothesis": edge.is_hypothesis,
+                    "extractor_id": result.meta.get("extractor_id")
+                }).eq("edge_id", edge_uuid).execute()
+            else:
+                edge_uuid = str(uuid.uuid4())
+                edge_data = {
+                    "edge_id": edge_uuid,
+                    "project_id": project_id,
+                    "from_asset_id": from_uuid,
+                    "to_asset_id": to_uuid,
+                    "edge_type": edge.edge_type,
+                    "confidence": edge.confidence,
+                    "extractor_id": result.meta.get("extractor_id"),
+                    "is_hypothesis": edge.is_hypothesis
+                }
+                self.supabase.table("edge_index").insert(edge_data).execute()
             
             # Edge Evidence Link
             for ref in edge.evidence_refs:
                 if ref in evidence_id_map:
-                    link_data = {
-                        "edge_id": edge_uuid,
-                        "evidence_id": evidence_id_map[ref]
-                    }
-                    self.supabase.table("edge_evidence").insert(link_data).execute()
+                    # Check link existence to avoid PK violation if (edge_id, evidence_id) is PK
+                    # Assuming edge_evidence has no ID or composite PK.
+                    # Best effort: delete and re-insert or ignore error.
+                    # Or check first.
+                    ev_uuid = evidence_id_map[ref]
+                    try:
+                        self.supabase.table("edge_evidence").insert({
+                            "edge_id": edge_uuid,
+                            "evidence_id": ev_uuid
+                        }).execute()
+                    except:
+                        pass # Ignore duplicate link error
                     
         return node_id_map
 

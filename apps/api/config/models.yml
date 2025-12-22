@@ -58,6 +58,33 @@ actions:
     timeout_ms: 60000
     description: "Análisis Python profundo"
 
+  # Extracción Paquetes (SSIS/DataStage) - V3
+  extract_lineage_package:
+    model: "llama-3.3-70b-versatile"
+    prompt_file: "prompts/v3/extract_lineage_package.txt"
+    temperature: 0.0
+    max_tokens: 8000
+    timeout_ms: 90000
+    description: "Análisis profundo de paquetes ETL (SSIS/DTSX)"
+
+  # Extracción Schema (DDL/SQL) - V3
+  extract_schema:
+    model: "llama-3.3-70b-versatile"
+    prompt_file: "prompts/v3/extract_schema.txt"
+    temperature: 0.0
+    max_tokens: 4096
+    timeout_ms: 60000
+    description: "Extracción precisa de definiciones de tablas y columnas"
+
+  # Extracción Lineage SQL (DML) - V3 Alias
+  extract_lineage_sql:
+    model: "llama-3.3-70b-versatile"
+    prompt_file: "prompts/extract_sql.txt"
+    temperature: 0.0
+    max_tokens: 4096
+    timeout_ms: 60000
+    description: "Análisis de transformaciones SQL (DML)"
+
 # Cadenas de fallback (usando modelos más pequeños de Groq si el grande falla o timeout)
 fallbacks:
   extract_strict:

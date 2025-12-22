@@ -53,18 +53,28 @@ async def process_job(job_queue_item):
         success = orchestrator.execute_pipeline(job_id, file_path)
         
         if success:
-            # Completar Job
-            supabase.table("job_run").update({
-                "status": "completed", 
-                "finished_at": "now()", 
-                "progress_pct": 100
-            }).eq("job_id", job_id).execute()
+            # Check current status to ensure we don't overwrite 'planning_ready'
+            job_check = supabase.table("job_run").select("status").eq("job_id", job_id).single().execute()
+            current_status = job_check.data["status"]
             
-            queue.complete_job(job_queue_item["id"])
-            
-            # Actualizar estado de solución
-            supabase.table("solutions").update({"status": "READY"}).eq("id", project_id).execute()
-            print(f"[WORKER] Job {job_id} Completed Successfully")
+            if current_status == "planning_ready":
+                print(f"[WORKER] Job {job_id} paused for planning approval.")
+                # We complete the queue item because this 'run' is done. 
+                # The approval process must re-enqueue the job.
+                queue.complete_job(job_queue_item["id"])
+            else:
+                # Completar Job
+                supabase.table("job_run").update({
+                    "status": "completed", 
+                    "finished_at": "now()", 
+                    "progress_pct": 100
+                }).eq("job_id", job_id).execute()
+                
+                queue.complete_job(job_queue_item["id"])
+                
+                # Actualizar estado de solución
+                supabase.table("solutions").update({"status": "READY"}).eq("id", project_id).execute()
+                print(f"[WORKER] Job {job_id} Completed Successfully")
             
         else:
             raise Exception("Pipeline execution failed (check logs)")

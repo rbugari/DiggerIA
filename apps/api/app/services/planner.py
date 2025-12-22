@@ -1,0 +1,164 @@
+import os
+import uuid
+import logging
+from datetime import datetime
+from typing import List, Dict
+from supabase import Client
+
+from ..models.planning import (
+    JobPlan, JobPlanArea, JobPlanItem, 
+    JobPlanStatus, JobPlanMode, AreaKey, Strategy, RecommendedAction
+)
+from .policy_engine import PolicyEngine
+from .estimator import Estimator
+
+logger = logging.getLogger(__name__)
+
+class PlannerService:
+    def __init__(self, supabase: Client):
+        self.supabase = supabase
+        self.policy_engine = PolicyEngine()
+        
+    def create_plan(self, job_id: str, root_path: str, mode: JobPlanMode = JobPlanMode.STANDARD) -> str:
+        """
+        Scans the directory, generates a plan, persists it, and returns plan_id.
+        """
+        logger.info(f"Creating plan for Job {job_id} at {root_path}")
+        
+        # 1. Create JobPlan Header
+        plan_id = str(uuid.uuid4())
+        plan_data = {
+            "plan_id": plan_id,
+            "job_id": job_id,
+            "status": JobPlanStatus.DRAFT,
+            "mode": mode,
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat()
+        }
+        self.supabase.table("job_plan").insert(plan_data).execute()
+        
+        # 2. Create Areas
+        areas = self._create_areas(plan_id)
+        
+        # 3. Inventory & Classify
+        items = []
+        total_stats = {"total_files": 0, "total_cost": 0.0, "total_time": 0.0}
+        
+        for root, dirs, files in os.walk(root_path):
+            for file in files:
+                full_path = os.path.join(root, file)
+                rel_path = os.path.relpath(full_path, root_path).replace("\\", "/")
+                
+                try:
+                    size_bytes = os.path.getsize(full_path)
+                except OSError:
+                    size_bytes = 0
+                
+                # Policy Check
+                rec_action, reason = self.policy_engine.evaluate(rel_path, size_bytes)
+                
+                # Classification & Strategy
+                area_key, strategy = self._classify_file(rel_path, rec_action)
+                
+                # Estimation
+                est = Estimator.estimate(size_bytes, strategy)
+                
+                # Create Item
+                area_id = areas[area_key]
+                item_id = str(uuid.uuid4())
+                
+                item = {
+                    "item_id": item_id,
+                    "plan_id": plan_id,
+                    "area_id": area_id,
+                    "path": rel_path,
+                    "size_bytes": size_bytes,
+                    "file_type": rel_path.split('.')[-1].upper() if '.' in rel_path else "UNKNOWN",
+                    "classifier": {"reason": reason},
+                    "strategy": strategy,
+                    "recommended_action": rec_action,
+                    "enabled": rec_action == RecommendedAction.PROCESS,
+                    "order_index": 0, # To be refined later
+                    "estimate": est
+                }
+                items.append(item)
+                
+                # Stats
+                if rec_action == RecommendedAction.PROCESS:
+                    total_stats["total_files"] += 1
+                    total_stats["total_cost"] += est["cost_usd"]
+                    total_stats["total_time"] += est["time_seconds"]
+        
+        # Batch Insert Items (chunks of 100)
+        chunk_size = 100
+        for i in range(0, len(items), chunk_size):
+            chunk = items[i:i+chunk_size]
+            self.supabase.table("job_plan_item").insert(chunk).execute()
+            
+        # Update Plan Summary
+        self.supabase.table("job_plan").update({
+            "summary": total_stats,
+            "status": JobPlanStatus.READY
+        }).eq("plan_id", plan_id).execute()
+        
+        # Link Plan to Job
+        self.supabase.table("job_run").update({
+            "plan_id": plan_id,
+            "status": "planning_ready" # Custom status for UI trigger
+        }).eq("job_id", job_id).execute()
+        
+        return plan_id
+
+    def _create_areas(self, plan_id: str) -> Dict[AreaKey, str]:
+        """Creates default areas and returns Map<AreaKey, AreaID>"""
+        areas_def = [
+            {"key": AreaKey.FOUNDATION, "title": "Foundation (SQL & Schema)", "order": 1},
+            {"key": AreaKey.PACKAGES, "title": "Orchestration & Packages", "order": 2},
+            {"key": AreaKey.AUX, "title": "Auxiliary & Scripts", "order": 3}
+        ]
+        
+        area_map = {}
+        for a in areas_def:
+            area_id = str(uuid.uuid4())
+            self.supabase.table("job_plan_area").insert({
+                "area_id": area_id,
+                "plan_id": plan_id,
+                "area_key": a["key"],
+                "title": a["title"],
+                "order_index": a["order"]
+            }).execute()
+            area_map[a["key"]] = area_id
+            
+        return area_map
+
+    def _classify_file(self, path: str, rec_action: RecommendedAction) -> tuple[AreaKey, Strategy]:
+        """Heuristic classification"""
+        if rec_action == RecommendedAction.SKIP:
+            return AreaKey.AUX, Strategy.SKIP
+            
+        lower_path = path.lower()
+        ext = lower_path.split('.')[-1] if '.' in lower_path else ""
+        
+        # 1. Foundation
+        if ext in ["sql", "ddl"] or "schema" in lower_path or "migration" in lower_path:
+            return AreaKey.FOUNDATION, Strategy.PARSER_PLUS_LLM
+            
+        if ext in ["md", "json", "txt"] and ("readme" in lower_path or "contract" in lower_path):
+             return AreaKey.FOUNDATION, Strategy.LLM_ONLY
+
+        # 2. Packages
+        if ext in ["dtsx", "dsx"]:
+            return AreaKey.PACKAGES, Strategy.PARSER_PLUS_LLM # Hybrid Parser v3
+            
+        if "jobs" in lower_path or "pipelines" in lower_path:
+            return AreaKey.PACKAGES, Strategy.LLM_ONLY
+
+        # 3. Aux / Scripts
+        if ext in ["py", "sh", "bat", "ps1"]:
+            return AreaKey.AUX, Strategy.LLM_ONLY
+            
+        if ext in ["xml", "config", "yaml", "yml", "env"]:
+            return AreaKey.AUX, Strategy.PARSER_ONLY
+            
+        # Default
+        return AreaKey.AUX, Strategy.LLM_ONLY

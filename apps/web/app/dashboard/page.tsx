@@ -18,6 +18,7 @@ export default function DashboardPage() {
   const [solutions, setSolutions] = useState<Solution[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState<string | null>(null);
 
   const [stats, setStats] = useState<Record<string, any>>({});
 
@@ -55,9 +56,15 @@ export default function DashboardPage() {
     // Polling for active jobs to update progress
     const interval = setInterval(() => {
         setSolutions(prev => {
-            // Only poll if there are processing solutions
+            // Only poll if there are processing solutions or solutions waiting for planning
             const hasProcessing = prev.some(s => s.status === 'PROCESSING' || s.status === 'QUEUED');
+            // We should also poll if we are in 'planning_ready' but status might still be PROCESSING in frontend?
+            // Actually backend updates solution status to PROCESSING during job.
+            // But if job is planning_ready, solution is still PROCESSING.
+            // So polling continues.
             if (hasProcessing) {
+                // Fetch stats for all solutions again to catch status updates
+                prev.forEach(sol => fetchStats(sol.id));
                 fetchSolutions();
             }
             return prev;
@@ -93,12 +100,19 @@ export default function DashboardPage() {
     }
   };
 
-  const handleReanalyze = async (id: string) => {
+  const handleReanalyze = async (id: string, mode: 'full' | 'update') => {
+    if (mode === 'full') {
+        if (!confirm("Are you sure? This will DELETE all existing data for this solution.")) return;
+    }
+    
     setProcessingId(id);
+    setMenuOpen(null);
     try {
-      await axios.post(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/solutions/${id}/analyze`);
-      alert("Analysis restarted. Status will update shortly.");
-      fetchSolutions(); // Refresh status
+      await axios.post(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/solutions/${id}/analyze`, {
+          mode: mode
+      });
+      alert(`Analysis started in ${mode.toUpperCase()} mode. Status will update shortly.`);
+      fetchSolutions(); 
     } catch (error) {
       console.error("Re-analyze failed", error);
       alert("Failed to restart analysis");
@@ -137,14 +151,34 @@ export default function DashboardPage() {
           {solutions.map((sol) => (
             <div key={sol.id} className="border border-border p-6 rounded-lg shadow-sm hover:shadow-md transition-shadow bg-card text-card-foreground relative group">
               <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
-                 <button 
-                  onClick={() => handleReanalyze(sol.id)}
-                  disabled={!!processingId}
-                  className="p-1.5 text-muted-foreground hover:text-primary hover:bg-secondary rounded-md transition-colors"
-                  title="Re-analyze"
-                >
-                  <RefreshCw size={16} className={processingId === sol.id ? 'animate-spin' : ''} />
-                </button>
+                 <div className="relative">
+                     <button 
+                      onClick={() => setMenuOpen(menuOpen === sol.id ? null : sol.id)}
+                      disabled={!!processingId}
+                      className="p-1.5 text-muted-foreground hover:text-primary hover:bg-secondary rounded-md transition-colors"
+                      title="Re-analyze Options"
+                    >
+                      <RefreshCw size={16} className={processingId === sol.id ? 'animate-spin' : ''} />
+                    </button>
+                    
+                    {menuOpen === sol.id && (
+                        <div className="absolute right-0 mt-2 w-48 bg-card border border-border rounded-md shadow-lg z-20 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                            <button
+                                onClick={() => handleReanalyze(sol.id, 'update')}
+                                className="w-full text-left px-4 py-2 text-sm hover:bg-muted transition-colors"
+                            >
+                                Incremental Update
+                            </button>
+                            <button
+                                onClick={() => handleReanalyze(sol.id, 'full')}
+                                className="w-full text-left px-4 py-2 text-sm hover:bg-destructive hover:text-destructive-foreground transition-colors border-t border-border"
+                            >
+                                Full Reprocess (Clean)
+                            </button>
+                        </div>
+                    )}
+                 </div>
+
                 <button 
                   onClick={() => handleDelete(sol.id)}
                   disabled={!!processingId}
@@ -157,30 +191,58 @@ export default function DashboardPage() {
 
               <h2 className="text-xl font-semibold mb-2 tracking-tight">{sol.name}</h2>
               <div className="flex items-center gap-2 mb-4">
-                <span className={`px-2 py-0.5 rounded-full text-xs font-medium border
-                  ${sol.status === 'READY' ? 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800' : 
-                    sol.status === 'PROCESSING' ? 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800' : 
-                    'bg-secondary text-secondary-foreground border-border'}`}>
-                  {sol.status}
-                </span>
+                  {stats[sol.id]?.active_job?.status === 'planning_ready' ? (
+                      <span className="px-2 py-0.5 rounded-full text-xs font-medium border bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-800 animate-pulse">
+                          Ready to Approve
+                      </span>
+                  ) : (
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium border
+                    ${sol.status === 'READY' ? 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800' : 
+                        sol.status === 'PROCESSING' ? 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800' : 
+                        'bg-secondary text-secondary-foreground border-border'}`}>
+                    {sol.status}
+                    </span>
+                  )}
                 <span className="text-xs text-muted-foreground">
-                  {new Date(sol.created_at).toLocaleDateString()}
+                  {stats[sol.id]?.last_run ? 
+                    new Date(stats[sol.id].last_run).toLocaleString() : 
+                    new Date(sol.created_at).toLocaleDateString()}
                 </span>
               </div>
               
               {/* Active Job Progress Section */}
-              {(sol.status === 'PROCESSING' || sol.status === 'QUEUED') && stats[sol.id]?.active_job && (
+              {/* Force show if there is an active job in planning_ready status OR if solution is processing */}
+              {((sol.status === 'PROCESSING' || sol.status === 'QUEUED') || (stats[sol.id]?.active_job?.status === 'planning_ready')) && stats[sol.id]?.active_job && (
                   <div className="mb-4 bg-blue-50 dark:bg-blue-900/20 p-3 rounded-md border border-blue-100 dark:border-blue-800">
                       <div className="flex justify-between text-xs font-medium text-blue-700 dark:text-blue-300 mb-1">
-                          <span>{sol.status === 'QUEUED' ? 'Waiting in queue...' : 'Analyzing...'}</span>
+                          <span>
+                              {stats[sol.id].active_job.status === 'planning_ready' ? 'Evaluating Plan - Action Required' :
+                               stats[sol.id].active_job.current_stage === 'planning' ? 'Generating Execution Plan...' :
+                               sol.status === 'QUEUED' ? 'Waiting in queue...' : 'Analyzing...'}
+                          </span>
                           <span>{stats[sol.id].active_job.progress_pct}%</span>
                       </div>
-                      <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-1.5 mb-2 overflow-hidden">
-                          <div 
-                             className="bg-blue-600 h-1.5 rounded-full transition-all duration-500 ease-out" 
-                             style={{ width: `${stats[sol.id].active_job.progress_pct}%` }}
-                          ></div>
-                      </div>
+                      
+                      {/* Show Approval Button if Planning Ready */}
+                      {stats[sol.id].active_job.status === 'planning_ready' ? (
+                          <div className="mt-2">
+                              <Link 
+                                href={`/solutions/${sol.id}/plan`}
+                                className="w-full block text-center bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-1.5 rounded transition-colors"
+                              >
+                                Review Plan
+                              </Link>
+                          </div>
+                      ) : (
+                          <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-1.5 mb-2 overflow-hidden">
+                              <div 
+                                 className="bg-blue-600 h-1.5 rounded-full transition-all duration-500 ease-out" 
+                                 style={{ width: `${stats[sol.id].active_job.progress_pct}%` }}
+                              ></div>
+                          </div>
+                      )}
+
+
                       
                       {/* Detailed Stats */}
                       {stats[sol.id].active_job.error_details && stats[sol.id].active_job.error_details.total_files > 0 && (

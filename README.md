@@ -1,28 +1,49 @@
-# Nexus Discovery Platform (v2.0)
+# Nexus Discovery Platform (v3.1)
 
 ## Overview
 Nexus Discovery is a SaaS platform for automated reverse engineering of data code (SSIS, SQL, Python) using Generative AI. It extracts data lineage, creates documentation, and visualizes relationships in a Knowledge Graph.
 
-## 🚀 What's New in v2.0
-- **Advanced Pipeline Orchestrator**: A robust, stage-based engine (Ingest -> Enumerate -> Extract -> Persist) that handles failures gracefully.
-- **Deep Lineage Extraction**: "Senior Data Engineer" prompts that extract granular details like SQL Queries, Column Transformations, and Complex Data Flows.
-- **Resilient AI Execution**: The new `ActionRunner` handles Rate Limits, Context Windows, and JSON Validation errors automatically, with smart fallbacks (e.g., Llama 3 70B -> 8B).
-- **Universal Ingestion**: Support for both **ZIP File Uploads** and **Git Repository Cloning**.
-- **Self-Healing Jobs**: Automatic re-queuing of failed jobs and partial result persistence.
+## 🚀 What's New in v3.1 (Plan-Driven Execution)
+- **Plan Review UI**: A new "Human-in-the-loop" step where users can review, approve, reorder, and categorize files before execution.
+- **Hybrid Parsing (SSIS/DataStage)**: Native XML parsing combined with LLM enrichment for accurate and cost-effective ETL extraction.
+- **Incremental Updates**: Reprocess solutions with "Full Clean" or "Incremental Update" modes to manage costs and history.
+- **Cost & Time Estimation**: Real-time estimates of Token usage, USD Cost, and Time for every file based on analysis strategy.
+- **Policy Engine**: Automatic exclusion of noise (e.g., `.git`, `node_modules`, binary files) to save tokens.
+
+## 🚀 Key Features (v2.0+)
+- **Advanced Pipeline Orchestrator**: A robust, stage-based engine (Ingest -> Plan -> Extract -> Persist).
+- **Deep Lineage Extraction**: "Senior Data Engineer" prompts for SQL, SSIS, and Python.
+- **Resilient AI Execution**: The `ActionRunner` handles Rate Limits and JSON errors with smart fallbacks (Llama 3 70B -> 8B).
+- **Universal Ingestion**: Support for ZIP File Uploads and Git Repositories.
 
 ## Documentation
 - [Functional Specification](docs/FUNCTIONAL_SPEC.md)
-- [Release Plan](docs/RELEASE_PLAN.md)
-- [Database Schema](docs/DATABASE_SCHEMA.md)
 - [Roadmap & Known Issues](docs/ROADMAP.md)
+- [Release Notes](docs/RELEASE_NOTES.md)
+- [Database Schema](docs/DATABASE_SCHEMA.md)
 
 ## Prerequisites
 1.  **Python 3.11+**
 2.  **Node.js 18+**
-3.  **Supabase Project** (Free Tier): [Create one here](https://supabase.com/)
-    *   Required: `URL` and `ANON_KEY`.
-    *   Setup: Run `db.sql` in Supabase SQL Editor.
-4.  **Neo4j AuraDB** (Free Tier): [Create one here](https://neo4j.com/cloud/aura/)
+3.  **Supabase Project** (Free Tier)
+4.  **Neo4j AuraDB** (Free Tier)
+
+## Quick Start
+1.  **Backend**:
+    ```bash
+    cd apps/api
+    pip install -r requirements.txt
+    python -m uvicorn app.main:app --reload
+    # In a separate terminal:
+    python -m app.worker
+    ```
+2.  **Frontend**:
+    ```bash
+    cd apps/web
+    npm install
+    npm run dev
+    ```
+3.  **Access**: Open `http://localhost:3000`
     *   Required: `URI`, `Username`, and `Password`.
 5.  **LLM Provider**:
     *   **Groq** (Recommended for speed/cost): Get API Key at [console.groq.com](https://console.groq.com).

@@ -21,6 +21,7 @@ class ExtractedNode(BaseModel):
     node_type: str = Field(..., description="table|view|file|api|process|package|task|script")
     name: str
     system: str = Field(..., description="sqlserver|files|api|unknown")
+    parent_node_id: Optional[str] = Field(None, description="ID of the parent node (e.g. Package ID for a Task)")
     attributes: Dict[str, Any] = Field(default_factory=dict)
 
 class ExtractedEdge(BaseModel):
