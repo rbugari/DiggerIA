@@ -1,4 +1,4 @@
-# DiscoverAI — Plan de implementación (Jobs + Evidencias/Confianza + Catálogo SQL + UX Grafo)
+# DiggerAI — Plan de implementación (Jobs + Evidencias/Confianza + Catálogo SQL + UX Grafo)
 > Documento de requerimientos funcionales y técnicos listo para entregar a un generador de código (TRAE AI).  
 > **Intención:** maximizar claridad y trazabilidad, pero **permitir que el generador reevalúe y elija el mejor camino** de implementación según el codebase actual.
 

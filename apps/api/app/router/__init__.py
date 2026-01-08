@@ -15,6 +15,7 @@ class ModelConfig:
     temperature: float = 0.1
     max_tokens: int = 1800
     timeout_ms: int = 60000
+    provider: Optional[str] = None
     
 @dataclass
 class ActionConfig:
@@ -148,7 +149,8 @@ class ModelRouter:
             prompt_file=action_config["prompt_file"],
             temperature=action_config.get("temperature", defaults.get("temperature", 0.1)),
             max_tokens=action_config.get("max_tokens", defaults.get("max_tokens", 1800)),
-            timeout_ms=action_config.get("timeout_ms", defaults.get("timeout_ms", 60000))
+            timeout_ms=action_config.get("timeout_ms", defaults.get("timeout_ms", 60000)),
+            provider=action_config.get("provider", defaults.get("provider"))
         )
         
         # Crear lista de fallbacks
@@ -160,7 +162,8 @@ class ModelRouter:
                     prompt_file=fallback_config["prompt_file"],
                     temperature=fallback_config.get("temperature", defaults.get("temperature", 0.1)),
                     max_tokens=fallback_config.get("max_tokens", defaults.get("max_tokens", 1800)),
-                    timeout_ms=fallback_config.get("timeout_ms", defaults.get("timeout_ms", 60000))
+                    timeout_ms=fallback_config.get("timeout_ms", defaults.get("timeout_ms", 60000)),
+                    provider=fallback_config.get("provider", defaults.get("provider"))
                 )
                 fallbacks.append(fallback_model)
         

@@ -1,4 +1,4 @@
-# DiscoverAI v3.0 — Anexos técnicos
+# DiggerAI v3.0 — Anexos técnicos
 
 Este documento **complementa** la SPEC v3.0 principal y debe entregarse **junto al spec** al generador de código.
 
@@ -273,5 +273,5 @@ Estas reglas **sobrescriben los defaults**.
 
 - El generador **no decide formatos**: los contratos están definidos.
 - El sistema es **predecible, auditable y costeable**.
-- DiscoverAI v3 se posiciona como **ingeniería de discovery**, no scraping con IA.
+- DiggerAI v3 se posiciona como **ingeniería de discovery**, no scraping con IA.
 

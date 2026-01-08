@@ -261,7 +261,8 @@ class SupabaseGraphService(GraphService):
                     # Mapear explícitamente propiedades clave para el frontend
                     "schema": tags.get("schema", ""),
                     "columns": tags.get("columns", []),
-                    "summary": tags.get("description", "") or tags.get("summary", "")
+                    "summary": tags.get("description", "") or tags.get("summary", ""),
+                    "parentId": a.get("parent_asset_id") or tags.get("parent_node_id")
                 }
             })
             

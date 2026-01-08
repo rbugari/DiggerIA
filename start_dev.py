@@ -24,7 +24,7 @@ def find_venv(root_dir):
     return None
 
 def main():
-    print("🚀 Iniciando DiscoverAI Dev Environment (v2.1)...")
+    print("🚀 Iniciando DiggerAI Dev Environment (v2.1)...")
     print("-----------------------------------------------")
 
     root_dir = os.getcwd()
@@ -47,15 +47,15 @@ def main():
     
     # API: Se ejecuta desde apps/api
     # start "Title" /D "WorkDir" cmd /k "command"
-    cmd_api = f'start "DiscoverAI API" /D "{api_dir}" cmd /k ""{python_exe}" -m uvicorn app.main:app --reload --port 8000"'
+    cmd_api = f'start "DiggerAI API" /D "{api_dir}" cmd /k ""{python_exe}" -m uvicorn app.main:app --reload --port 8000"'
     
     # Worker: Se ejecuta desde apps/api
     # Usamos el script custom worker.py (Polling Loop)
-    cmd_worker = f'start "DiscoverAI Worker" /D "{api_dir}" cmd /k ""{python_exe}" -m app.worker"'
+    cmd_worker = f'start "DiggerAI Worker" /D "{api_dir}" cmd /k ""{python_exe}" -m app.worker"'
 
     # Web: Se ejecuta desde apps/web
     # Asumimos que npm está en el PATH global
-    cmd_web = f'start "DiscoverAI Web" /D "{web_dir}" cmd /k "npm run dev"'
+    cmd_web = f'start "DiggerAI Web" /D "{web_dir}" cmd /k "npm run dev"'
 
     print("\nIniciando servicios...")
     

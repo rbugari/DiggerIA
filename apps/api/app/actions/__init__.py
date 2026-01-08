@@ -8,6 +8,7 @@ import os
 from typing import Dict, List, Optional, Any, Union
 from dataclasses import dataclass
 from datetime import datetime
+import uuid
 
 from ..router import get_model_router, ActionConfig, ModelConfig
 from ..audit import FileProcessingLogger
@@ -57,7 +58,100 @@ class ActionRunner:
             "deepseek/deepseek-chat": 0.002,
             "google/gemini-2.0-flash-thinking": 0.003,
         }
-    
+        
+    def extract_file(self, file_path: str, content: str) -> ActionResult:
+        """
+        Specialized action for extraction that leverages the ExtractorRegistry.
+        This bypasses the generic 'run_action' prompt flow if a native extractor exists.
+        """
+        start_time = time.time()
+        try:
+            from ..services.extractors.registry import ExtractorRegistry
+            from ..models.cir import CIRPackage
+            
+            registry = ExtractorRegistry()
+            extractor = registry.get_extractor(file_path)
+            
+            # Try Deep Extraction (V3 Kernel)
+            cir_package = extractor.extract_deep(file_path, content)
+            
+            if cir_package:
+                print(f"[ACTION_RUNNER] Using Deep Extractor for {file_path}")
+                
+                # Logic Injection Phase (Micro-Analysis)
+                # Iterate transformations and inject SQL if needed
+                # (This is where we would call the LLM for each expression)
+                # For now, we return the CIR structure mapped to standard output
+                
+                # Convert CIR to Standard Result (Nodes/Edges)
+                nodes = []
+                edges = []
+                
+                # Group transformations by node_id
+                trans_map = {}
+                for t in cir_package.transformations:
+                    if t.node_id not in trans_map: trans_map[t.node_id] = []
+                    trans_map[t.node_id].append({
+                        "column": t.column_name,
+                        "expression": t.expression_raw
+                    })
+
+                for node in cir_package.nodes:
+                    attrs = node.properties.copy()
+                    attrs["transformations"] = trans_map.get(node.id, [])
+                    attrs["columns_metadata"] = node.columns_metadata
+                    
+                    # Derive a flat list of unique column names for simple UI display
+                    flat_columns = sorted(list(set([c.get("name") for c in node.columns_metadata if c.get("name")])))
+                    attrs["columns"] = flat_columns
+                    
+                    nodes.append({
+                        "node_id": node.id,
+                        "name": node.name,
+                        "node_type": node.type.lower(),
+                        "system": cir_package.source_system,
+                        "parent_node_id": node.parent_id, # Top level for Pydantic model
+                        "attributes": attrs,
+                        "columns_metadata": node.columns_metadata # Keep as field too
+                    })
+                    
+                for flow in cir_package.data_flows:
+                    edges.append({
+                        "edge_id": str(uuid.uuid4()),
+                        "from_node_id": flow.source_id,
+                        "to_node_id": flow.target_id,
+                        "edge_type": "FLOWS_TO",
+                        "confidence": 1.0,
+                        "rationale": "Directly extracted from SSIS Data Flow pipeline XML",
+                        "attributes": {"columns": flow.columns}
+                    })
+                
+                return ActionResult(
+                    success=True,
+                    data={
+                        "nodes": nodes, 
+                        "edges": edges,
+                        "metadata": {"extractor": "native_deep_ssis", "version": "3.0"},
+                        "evidences": [],
+                        "cir_package": cir_package.dict()
+                    },
+                    model_used="native_deep_parser",
+                    latency_ms=int((time.time() - start_time) * 1000)
+                )
+            
+            # Fallback to Legacy/LLM Extraction
+            print(f"[ACTION_RUNNER] Fallback to legacy extraction for {file_path}")
+            # If native extractor returns None, we might still want to try LLM prompt
+            # But normally we call run_action('extract_lineage', ...) from the service layer.
+            # Here we just return failure to prompt the service to use the LLM action.
+            return ActionResult(success=False, error_type="native_extraction_unavailable")
+
+        except Exception as e:
+            print(f"[ACTION_RUNNER] Deep Extraction failed: {e}")
+            import traceback
+            traceback.print_exc()
+            return ActionResult(success=False, error_message=str(e))
+
     def run_action(
         self, 
         action_name: str, 
@@ -136,9 +230,12 @@ class ActionRunner:
             
             # Si hay contenido grande, truncarlo ANTES de dumps
             if "content" in safe_input and isinstance(safe_input["content"], str):
-                if len(safe_input["content"]) > 100000: # Subir a 100k ya que el JSON será válido
-                    print(f"[ACTION_RUNNER] Truncating content from {len(safe_input['content'])} to 100000 chars")
-                    safe_input["content"] = safe_input["content"][:100000] + "... (truncated)"
+                limit = 200000 
+                if len(safe_input["content"]) > limit:
+                    print(f"[ACTION_RUNNER] Truncating content from {len(safe_input['content'])} to {limit} chars (preserving head and tail)")
+                    head_size = limit // 2
+                    tail_size = limit // 2
+                    safe_input["content"] = safe_input["content"][:head_size] + "\n... (TRUNCATED) ...\n" + safe_input["content"][-tail_size:]
             
             input_json = json.dumps(safe_input)
             
@@ -153,7 +250,7 @@ class ActionRunner:
                 messages=messages,
                 temperature=model_config.temperature,
                 max_tokens=model_config.max_tokens,
-                provider=settings.LLM_PROVIDER # Usar provider configurado (groq/openrouter)
+                provider=model_config.provider or settings.LLM_PROVIDER
             )
             
             latency_ms = int((time.time() - start_time) * 1000)
@@ -175,11 +272,9 @@ class ActionRunner:
             # Validar JSON si es necesario
             if self._requires_json_validation(model_config.prompt_file):
                 try:
-                    # Limpiar respuesta para extraer JSON
                     cleaned_content = self._clean_json_response(response_content)
                     parsed_data = json.loads(cleaned_content)
                     
-                    # Validar contra esquema específico
                     validation_error = self._validate_json_schema(
                         parsed_data, 
                         model_config.prompt_file
@@ -187,7 +282,6 @@ class ActionRunner:
                     
                     if validation_error:
                         print(f"[ACTION_RUNNER] JSON Validation Failed for {model_config.model}: {validation_error}")
-                        print(f"[ACTION_RUNNER] Raw Content Preview: {cleaned_content[:200]}...")
                         return ActionResult(
                             success=False,
                             error_message=f"JSON validation failed: {validation_error}",
@@ -200,7 +294,6 @@ class ActionRunner:
                     
                 except json.JSONDecodeError as e:
                     print(f"[ACTION_RUNNER] JSON Decode Error for {model_config.model}: {e}")
-                    print(f"[ACTION_RUNNER] Raw Content Preview: {cleaned_content[:200]}...")
                     return ActionResult(
                         success=False,
                         error_message=f"Invalid JSON response: {str(e)}",
@@ -211,7 +304,6 @@ class ActionRunner:
             else:
                 response_data = {"content": response_content}
             
-            # Calcular costo estimado
             tokens_in = llm_result.get("tokens_in", 0)
             tokens_out = llm_result.get("tokens_out", 0)
             total_tokens = tokens_in + tokens_out
@@ -221,7 +313,6 @@ class ActionRunner:
                 total_tokens
             )
             
-            # Actualizar log de auditoría si existe
             if log_id:
                 self.logger.update_model_usage(log_id, "openrouter", model_config.model)
                 self.logger.update_tokens_and_cost(
@@ -279,7 +370,6 @@ class ActionRunner:
             models_attempted.append(fallback_config.model)
             
             if result.success:
-                # Marcar que se usó fallback
                 result.fallback_used = True
                 result.models_attempted = models_attempted
                 
@@ -295,9 +385,6 @@ class ActionRunner:
                 print(f"[ACTION_RUNNER] Fallback successful with {result.model_used}")
                 return result
         
-        # Todos los fallbacks fallaron
-        print(f"[ACTION_RUNNER] All fallbacks exhausted. Models attempted: {models_attempted}")
-        
         return ActionResult(
             success=False,
             error_message="All models failed. Fallback chain exhausted.",
@@ -310,47 +397,43 @@ class ActionRunner:
     def _load_prompt(self, prompt_file: str, input_data: Dict[str, Any], context: Dict[str, Any]) -> str:
         """Carga y prepara el prompt"""
         try:
-            # Construir path completo del prompt.
-            # __file__ = apps/api/app/actions/__init__.py
-            # prompt_dir = apps/api/app/prompts
-            prompt_dir = os.path.join(os.path.dirname(__file__), "..", "prompts")
+            # Forzamos limpieza del path
+            clean_file = prompt_file.strip().replace("\\", "/")
             
-            # models.yml puede tener "prompts/file.txt", extraemos solo el nombre
-            filename = os.path.basename(prompt_file)
+            # Si empieza con / o ./ lo quitamos
+            if clean_file.startswith("./"): clean_file = clean_file[2:]
+            if clean_file.startswith("/"): clean_file = clean_file[1:]
             
-            prompt_path = os.path.join(prompt_dir, filename)
+            # Si empieza con prompts/ lo quitamos
+            if clean_file.startswith("prompts/"):
+                clean_file = clean_file.replace("prompts/", "", 1)
             
+            prompt_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "prompts"))
+            prompt_path = os.path.normpath(os.path.join(prompt_dir, clean_file))
+            
+            # Log de depuración para ver qué está pasando exactamente
+            # print(f"[ACTION_RUNNER] Loading prompt: original='{prompt_file}', clean='{clean_file}', final='{prompt_path}'")
+            
+            # Security check
+            if not prompt_path.startswith(prompt_dir):
+                raise Exception(f"Insecure prompt path: {prompt_file}")
+            
+            if not os.path.exists(prompt_path):
+                # Intentamos buscarlo sin el prefijo v3 si fallara, por si acaso
+                raise FileNotFoundError(f"Prompt file not found: {prompt_path}")
+
             with open(prompt_path, 'r', encoding='utf-8') as f:
                 prompt_template = f.read()
             
-            # Combinar input_data y context para interpolación
             format_data = {**input_data, **context}
             
-            # Interpolar variables de forma segura
-            try:
-                # Usar format_map para ignorar claves faltantes si es necesario, 
-                # pero format() es estándar. Si faltan claves, fallará, lo cual es bueno para debugging.
-                # Sin embargo, los prompts pueden tener {json} que no son variables.
-                # Mejor hacemos un reemplazo manual de las claves conocidas o escapamos llaves.
-                
-                # Estrategia simple: Reemplazar solo las claves que sabemos que existen
-                for key, value in format_data.items():
-                    if isinstance(value, str):
-                        prompt_template = prompt_template.replace(f"{{{key}}}", value)
-                    elif isinstance(value, (int, float, bool)):
-                        prompt_template = prompt_template.replace(f"{{{key}}}", str(value))
-                        
-                # Para content que puede ser grande o json, a veces se pasa directo en messages,
-                # pero aquí el prompt template lo incluye.
-                
-                return prompt_template
-            except Exception as fmt_e:
-                print(f"[ACTION_RUNNER] Warning: Prompt interpolation failed: {fmt_e}")
-                return prompt_template
-            
-        except FileNotFoundError:
-            # Si no existe el archivo específico, usar prompt genérico
-            return self._get_generic_prompt(prompt_file, input_data, context)
+            for key, value in format_data.items():
+                if isinstance(value, str):
+                    prompt_template = prompt_template.replace(f"{{{key}}}", value)
+                elif isinstance(value, (int, float, bool)):
+                    prompt_template = prompt_template.replace(f"{{{key}}}", str(value))
+                    
+            return prompt_template
         except Exception as e:
             print(f"[ACTION_RUNNER] Error loading prompt {prompt_file}: {e}")
             return self._get_generic_prompt(prompt_file, input_data, context)
@@ -359,123 +442,98 @@ class ActionRunner:
         """Prompt genérico cuando no se encuentra el archivo específico"""
         
         if "triage" in prompt_file:
-            return f"""
-You are a data engineering expert. Analyze the following file content and determine:
-1. What type of file is this? (SQL, Python, SSIS, etc.)
-2. Does it contain data processing logic?
-3. Should we use heavy extraction on this file?
-
-File path: {context.get('file_path', 'unknown')}
-Content preview: {str(input_data)[:200]}...
-
-Respond with JSON: {{"doc_type": "type", "needs_heavy": boolean, "why": "reason"}}
-"""
-        
-        elif "extract" in prompt_file:
-            return f"""
-You are a data lineage expert. Extract data assets and relationships from this code.
-
-File: {context.get('file_path', 'unknown')}
-Content: {json.dumps(input_data, indent=2)}
-
-Extract:
-- Tables/views mentioned
-- Files read/written  
-- APIs called
-- Data transformations
-
-Respond with JSON containing "nodes" and "edges" arrays.
-"""
-        
-        elif "summarize" in prompt_file:
-            return f"""
-Summarize what this data asset does in one concise paragraph.
-
-File: {context.get('file_path', 'unknown')}
-Content: {json.dumps(input_data, indent=2)}
-
-Provide a clear, technical summary suitable for documentation.
-"""
-        
+            return f"Analyze the following code and return a JSON with categorization. Code: \n{{content}}"
+        elif "extract" in prompt_file or "strict" in prompt_file:
+            return (
+                "Extract nodes and edges from this file and return a valid JSON object.\n"
+                "SCHEMA TEMPLATE:\n"
+                "{\n"
+                "  \"nodes\": [{\"node_id\": \"id1\", \"node_type\": \"table\", \"name\": \"name1\", \"system\": \"sql\"}],\n"
+                "  \"edges\": [{\"from_node_id\": \"id1\", \"to_node_id\": \"id2\", \"edge_type\": \"data_flow\"}]\n"
+                "}\n"
+                "File content to analyze:\n{content}"
+            )
+        elif "translate_logic" in prompt_file:
+            return "You are a SQL expert. Translate the following expression to standard SQL. Return JSON: {\"sql\": \"...\", \"explanation\": \"...\"}. Expression: {expression_raw}"
         else:
-            return f"""
-Analyze the following data and provide insights.
-
-Input: {json.dumps(input_data, indent=2)}
-
-Respond with JSON containing your analysis.
-"""
+            return "Generic prompt fallback. Return JSON: {\"status\": \"ok\"}. Context: {content}"
     
     def _requires_json_validation(self, prompt_file: str) -> bool:
         """Determina si el prompt requiere validación JSON"""
-        return "extract" in prompt_file or "strict" in prompt_file
+        return "extract" in prompt_file or "strict" in prompt_file or "translate_logic" in prompt_file
     
     def _validate_json_schema(self, data: Dict[str, Any], prompt_file: str) -> Optional[str]:
         """Valida el JSON contra el esquema esperado"""
         try:
-            if "extract" in prompt_file:
-                # Validar que tenga nodes y edges
-                if "nodes" not in data:
-                    return "Missing 'nodes' field"
-                if "edges" not in data:
-                    return "Missing 'edges' field"
+            if "extract" in prompt_file or "strict" in prompt_file:
+                if "nodes" not in data: return "Missing 'nodes' field"
+                if "edges" not in data: return "Missing 'edges' field"
                 
-                # Validar estructura de nodos
-                if not isinstance(data["nodes"], list):
-                    return "'nodes' must be a list"
+                # Deep validation of nodes
+                for i, node in enumerate(data.get("nodes", [])):
+                    if not isinstance(node, dict): return f"node[{i}] is not an object"
+                    for field in ["node_id", "node_type", "name"]:
+                        if field not in node: return f"node[{i}] missing '{field}'"
                 
-                # Validar estructura de edges
-                if not isinstance(data["edges"], list):
-                    return "'edges' must be a list"
-                
-                # Validar campos requeridos en nodos
-                for i, node in enumerate(data["nodes"]):
-                    if not isinstance(node, dict):
-                        return f"Node {i} must be an object"
-                    if "node_id" not in node:
-                        return f"Node {i} missing 'node_id'"
-                    if "node_type" not in node:
-                        return f"Node {i} missing 'node_type'"
-                
-                # Validar campos requeridos en edges (y filtrar los malos)
-                valid_edges = []
-                invalid_edges_count = 0
-                for i, edge in enumerate(data["edges"]):
-                    if isinstance(edge, dict) and "from_node_id" in edge and "to_node_id" in edge:
-                         valid_edges.append(edge)
-                    else:
-                         invalid_edges_count += 1
-                
-                if invalid_edges_count > 0:
-                     print(f"[ACTION_RUNNER] Warning: Ignored {invalid_edges_count} invalid edges in {prompt_file}")
-                
-                data["edges"] = valid_edges # Actualizar lista con solo los válidos
+                # Deep validation of edges
+                for i, edge in enumerate(data.get("edges", [])):
+                    if not isinstance(edge, dict): return f"edge[{i}] is not an object"
+                    for field in ["from_node_id", "to_node_id"]:
+                        if field not in edge: return f"edge[{i}] missing '{field}'"
             
-            return None  # Validación exitosa
+            if "translate_logic" in prompt_file:
+                if "sql" not in data: return "Missing 'sql' field"
             
+            return None
         except Exception as e:
-            return f"Schema validation error: {str(e)}"
+            return str(e)
     
     def _clean_json_response(self, text: str) -> str:
         """Limpia la respuesta del LLM para extraer solo el JSON"""
+        if not text:
+            return "{}"
         text = text.strip()
-        
-        # Intentar encontrar bloque de código JSON
         import re
-        json_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+        
+        # Try finding multi-line JSON blocks first
+        json_match = re.search(r"```(?:json)?\s*(\{.*\}|\[.*\])\s*```", text, re.DOTALL)
         if json_match:
             return json_match.group(1)
             
-        # Si no hay bloque de código, intentar encontrar el primer { y el último }
-        # Esto es más agresivo pero necesario si el LLM devuelve texto alrededor
+        # Try finding the first { and last }
         try:
             start = text.index('{')
             end = text.rindex('}') + 1
             return text[start:end]
         except ValueError:
-            return text
+            # Try finding the first [ and last ]
+            try:
+                start = text.index('[')
+                end = text.rindex(']') + 1
+                return text[start:end]
+            except ValueError:
+                return text
 
     def _estimate_cost(self, model: str, tokens: int) -> float:
         """Estima el costo en USD basado en el modelo y tokens"""
-        cost_per_1k = self.cost_estimates.get(model, 0.002)  # Default a 0.002 si no conocemos el modelo
+        cost_per_1k = self.cost_estimates.get(model, 0.002)
         return (tokens / 1000) * cost_per_1k
+
+    def translate_logic(self, column_name: str, expression_raw: str, node_name: str, source_system: str) -> ActionResult:
+        """
+        Translates an SSIS expression to SQL/dbt using LLM.
+        """
+        input_data = {
+            "column_name": column_name,
+            "expression_raw": expression_raw,
+            "node_name": node_name,
+            "source_system": source_system
+        }
+        
+        result = self.run_action(
+            action_name="translate_logic",
+            input_data=input_data,
+            context={"column": column_name, "node": node_name}
+        )
+        
+        return result

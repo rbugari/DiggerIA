@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Response
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from .tasks import analyze_solution_task
@@ -7,7 +7,7 @@ from .routers import planning
 
 load_dotenv()
 
-app = FastAPI(title="Nexus Discovery API")
+app = FastAPI(title="DiggerAI API")
 
 # Configure CORS
 app.add_middleware(
@@ -26,7 +26,7 @@ class JobRequest(BaseModel):
 
 @app.get("/")
 def read_root():
-    return {"message": "Nexus Discovery API is running (No Docker Mode)"}
+    return {"message": "DiggerAI API is running (No Docker Mode)"}
 
 @app.get("/health")
 def health_check():
@@ -103,6 +103,52 @@ async def chat_solution(solution_id: str, request: ChatRequest):
     answer = llm_service.chat_with_graph(graph_data, request.question)
     
     return {"answer": answer}
+
+class TranslationRequest(BaseModel):
+    column_name: str
+    expression_raw: str
+    node_name: str
+    source_system: str = "SSIS"
+
+@app.post("/solutions/{solution_id}/translate-logic")
+async def translate_logic(solution_id: str, request: TranslationRequest):
+    from .actions import ActionRunner
+    
+    runner = ActionRunner()
+    result = runner.translate_logic(
+        column_name=request.column_name,
+        expression_raw=request.expression_raw,
+        node_name=request.node_name,
+        source_system=request.source_system
+    )
+    
+    if not result.success:
+        raise HTTPException(status_code=500, detail=result.error_message)
+        
+    return result.data
+
+@app.get("/solutions/{solution_id}/report")
+async def get_solution_report(solution_id: str):
+    from .services.report import ReportService
+    from supabase import create_client
+    from .config import settings
+    
+    supabase = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
+    report_service = ReportService(supabase)
+    
+    try:
+        pdf_bytes = report_service.generate_solution_report(solution_id)
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"attachment; filename=Nexus_Discovery_Report_{solution_id[:8]}.pdf"
+            }
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.options("/solutions/{solution_id}/chat")
 async def chat_solution_options(solution_id: str):
@@ -187,9 +233,12 @@ async def reanalyze_solution(solution_id: str, request: ReanalyzeRequest = Reana
 
     # Fetch solution to get file_path
     try:
-        response = supabase.from_("solutions").select("storage_path").eq("id", solution_id).single().execute()
-        if not response.data:
-            raise HTTPException(status_code=404, detail="Solution not found")
+        response = supabase.from_("solutions").select("storage_path").eq("id", solution_id).execute()
+        
+        if not response.data or len(response.data) == 0:
+            raise HTTPException(status_code=404, detail=f"Solution {solution_id} not found in the new database. Please refresh the browser and re-upload the project.")
+            
+        storage_path = response.data[0]["storage_path"]
             
         # Create Job Run
         job_data = {
@@ -199,6 +248,10 @@ async def reanalyze_solution(solution_id: str, request: ReanalyzeRequest = Reana
             "requires_approval": True
         }
         res = supabase.table("job_run").insert(job_data).execute()
+        
+        if not res.data:
+            raise HTTPException(status_code=500, detail="Failed to create job record")
+            
         new_job_id = res.data[0]["job_id"]
         
         # Update Solution Status to QUEUED
@@ -210,7 +263,10 @@ async def reanalyze_solution(solution_id: str, request: ReanalyzeRequest = Reana
         
         return {"status": "queued", "job_id": new_job_id, "mode": request.mode}
         
+    except HTTPException as he:
+        raise he
     except Exception as e:
+        print(f"Error in reanalyze_solution: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 class SubgraphRequest(BaseModel):
@@ -323,22 +379,23 @@ async def get_solution_stats(solution_id: str):
     # Total Assets
     assets_count = supabase.table("asset").select("asset_id", count="exact").eq("project_id", solution_id).execute()
     
-    # Assets by Type
-    # Supabase doesn't support GROUP BY easily in simple client, use RPC or just raw fetch (inefficient for large data but ok for MVP)
-    # Or multiple queries.
+    # Assets by Type: Dynamic Aggregation
+    # Since supabase-py doesn't support GROUP BY, we fetch type and count manually if data is small,
+    # or perform a select on all existing types.
+    # A better approach for scalability is a dedicated RPC, but for now we'll fetch unique types.
     
-    # Let's count common types explicitly
-    files_count = supabase.table("asset").select("asset_id", count="exact").eq("project_id", solution_id).eq("asset_type", "FILE").execute()
-    tables_count = supabase.table("asset").select("asset_id", count="exact").eq("project_id", solution_id).eq("asset_type", "TABLE").execute()
-    pipelines_count = supabase.table("asset").select("asset_id", count="exact").eq("project_id", solution_id).eq("asset_type", "PIPELINE").execute()
+    type_res = supabase.table("asset").select("asset_type").eq("project_id", solution_id).execute()
+    asset_types_counts = {}
+    if type_res.data:
+        for item in type_res.data:
+            t = item["asset_type"]
+            asset_types_counts[t] = asset_types_counts.get(t, 0) + 1
     
     # Total Edges (Relationships)
     edges_count = supabase.table("edge_index").select("edge_id", count="exact").eq("project_id", solution_id).execute()
     
-    # Active Job Status (New)
+    # Active Job Status
     job_status = None
-    # Check if there is a running or queued job
-    # Ensure we are selecting 'job_id' explicitly as 'id' is not in the schema for job_run
     job_res = supabase.table("job_run")\
         .select("job_id, plan_id, status, progress_pct, error_details, created_at, current_stage")\
         .eq("project_id", solution_id)\
@@ -349,19 +406,7 @@ async def get_solution_stats(solution_id: str):
         
     if job_res.data:
         job_status = job_res.data[0]
-    else:
-        # Check for completed jobs to ensure we don't miss status if just finished?
-        # No, active job implies currently running/queued. 
-        # But if we want to show "Planning Ready" even if it's not strictly "running" (it's paused),
-        # we need to ensure 'planning_ready' is included (which I did).
-        pass
     
-    # DEBUG: Print status for troubleshooting
-    if job_status:
-        print(f"DEBUG: Active Job for {solution_id}: {job_status['status']} (Plan: {job_status.get('plan_id')})")
-    else:
-        print(f"DEBUG: No active job for {solution_id}")
-
     # Last Completed Job
     last_run = None
     last_run_res = supabase.table("job_run")\
@@ -378,9 +423,7 @@ async def get_solution_stats(solution_id: str):
     return {
         "total_assets": assets_count.count,
         "total_edges": edges_count.count,
-        "files": files_count.count,
-        "tables": tables_count.count,
-        "pipelines": pipelines_count.count,
+        "asset_types": asset_types_counts,
         "active_job": job_status,
         "last_run": last_run
     }

@@ -1,42 +1,39 @@
-# Release Notes - Nexus Discovery v3.1
+# Release Notes - DiggerAI v3.2
 
-**Date:** December 22, 2025
-**Theme:** "Plan, Control & Optimize"
+**Date:** January 8, 2026
+**Theme:** "Hierarchical Intelligence & Impact Analysis"
 
 ## 🌟 Highlights
 
-DiscoverAI v3.1 introduces a fundamental shift in how we process data repositories. Instead of "blindly" analyzing every file, we now use a **Plan-Driven Orchestrator**. This allows users to review the scope, cost, and strategy before execution begins.
+DiggerAI v3.2 brings a revolutionary way to visualize and analyze complex data ecosystems. This release focuses on making deep technical logic accessible to all stakeholders through hierarchical organization and automated impact tracing.
 
-### 1. Planning Phase & Review UI
-- **Pre-flight Scan**: When you upload a ZIP or Repo, the system now creates a "Job Plan" in seconds.
-- **Review Dashboard**: A new UI lets you see exactly what files will be processed.
-- **Cost Estimation**: See estimated Token usage, Cost (USD), and Time for the entire job and per-file.
-- **Control**: Toggle files ON/OFF or reorder them (e.g., prioritize Schema files before ETLs).
+### 1. Hierarchical Visualization (Containers)
+- **Structural Encapsulation**: Complex file formats like SSIS (.dtsx) are no longer rendered as a flat list of nodes. They are now encapsulated in containers that represent the package itself.
+- **Deep Nesting**: The graph layout now respects parent-child relationships, grouping tasks and data flows inside their respective packages.
 
-### 2. Hybrid Parsing (SSIS & DataStage)
-- **Problem**: Sending huge XML files to LLMs is slow, expensive, and error-prone.
-- **Solution**: We implemented a native Python parser for `.dtsx` files that extracts the structure (Control Flow) locally.
-- **Result**: The LLM only receives the relevant metadata and SQL queries, reducing token usage by ~60% and improving accuracy.
+### 2. Visual Impact Analysis (Blast Radius)
+- **Impact Mode**: A new interactive mode that allows you to click any node and instantly visualize its downstream consequences.
+- **Automated Highlighting**: Affected assets and connections are highlighted and animated, while unrelated nodes are dimmed, providing clear focus on the "blast radius" of a change.
 
-### 3. Reprocessing Modes
-- **Incremental Update**: Re-run analysis on a solution to pick up new files or retry failed ones without deleting existing history.
-- **Full Clean**: A "Nuclear Option" in the UI to wipe all data for a solution and start fresh (useful for testing new prompts).
+### 3. Persona-Based Perspectives
+- **Architect View**: A high-level, business-oriented view that hides technical transformations and noise to show a clean map of data assets.
+- **Engineer View**: A deep-dive technical view for auditing logic and debugging individual transformations.
 
-### 4. Smart Policy Engine
-- **Noise Reduction**: Automatically ignores `.git/`, `node_modules/`, `__pycache__/`, and binary files.
-- **Security**: Prevents processing of potential secrets files (config.json, .env) unless explicitly allowed (future).
+### 4. Professional Reporting
+- **PDF Export**: Generate a comprehensive, multi-page PDF report including executive summaries, component distributions, and an asset inventory with deep metadata.
+- **Unicode Resilience**: The reporting engine is now robust against special characters and Spanish accents, ensuring stable exports for international projects.
 
 ## 🛠 Technical Improvements
-- **New Tables**: `job_plan`, `job_plan_area`, `job_plan_item` in Supabase.
-- **Validation**: Strict JSON Schema enforcement for all LLM outputs to prevent "hallucinated" fields.
-- **Upsert Logic**: Catalog service now supports idempotent writes (updating existing assets instead of duplicating).
+- **Hierarchy Engine**: Updated `CatalogService` and `GraphService` to support a native `parent_asset_id` column in Supabase for true 1:N relationships.
+- **Safe-String Utility**: Implemented a global utility in the report service to handle non-latin-1 characters via character replacement.
+- **Refined Filter Logic**: Enhanced the perspective engine to aggressively filter process-oriented nodes in the Architect view.
 
 ## 🐛 Bug Fixes
-- Fixed issue where SSIS extraction failed silently due to missing parser import.
-- Fixed "Assets = 0" bug caused by strict Pydantic validation on optional fields.
-- Fixed Dashboard date display to show "Last Run" instead of creation date.
+- Fixed `NameError` in the backend base extractor that could cause transient crashes.
+- Resolved an issue with duplicate `ReactFlow` blocks in the frontend that caused layout instability.
+- Fixed character encoding crashes in the PDF generation service.
 
-## 🔜 What's Next (v3.2)
-- PDF/CSV Export for documentation.
-- Graph Visualization filters.
-- Real-time WebSocket progress bar.
+## 🔜 What's Next (v3.3)
+- Real-time WebSocket progress bar for analysis.
+- Column-level lineage tracing.
+- Docker integration for easy deployment.

@@ -1,4 +1,4 @@
-# Configuración de Modelos y Acciones para DiscoverAI (GROQ MODE)
+# Configuración de Modelos y Acciones para DiggerAI (GROQ MODE)
 # Version: 2.0 (Llama 3 Strategy)
 # Fecha: 2025-12-18
 
@@ -9,7 +9,7 @@ defaults:
   temperature: 0.1
   max_tokens: 8000
   timeout_ms: 60000
-  provider: "groq"
+  provider: "openrouter"
 
 # Definición de acciones y sus modelos primarios
 actions:
@@ -24,7 +24,7 @@ actions:
 
   # Extracción estricta: Analizador Principal (Inteligencia)
   extract_strict:
-    model: "llama-3.3-70b-versatile"
+    model: "deepseek/deepseek-v3.2"
     prompt_file: "prompts/extract_strict.txt"
     temperature: 0.0
     max_tokens: 4096
@@ -33,7 +33,7 @@ actions:
 
   # Resumen
   summarize:
-    model: "llama-3.3-70b-versatile"
+    model: "google/gemini-2.5-flash-lite"
     prompt_file: "prompts/summarize.md" 
     temperature: 0.2
     max_tokens: 2000
@@ -42,7 +42,7 @@ actions:
 
   # Extracción SQL
   extract_sql:
-    model: "llama-3.3-70b-versatile"
+    model: "deepseek/deepseek-v3.2"
     prompt_file: "prompts/extract_sql.txt"
     temperature: 0.0
     max_tokens: 4096
@@ -51,7 +51,7 @@ actions:
 
   # Extracción Python
   extract_python:
-    model: "llama-3.3-70b-versatile"
+    model: "deepseek/deepseek-v3.2"
     prompt_file: "prompts/extract_python.md"
     temperature: 0.0
     max_tokens: 4096
@@ -60,7 +60,7 @@ actions:
 
   # Extracción Paquetes (SSIS/DataStage) - V3
   extract_lineage_package:
-    model: "llama-3.3-70b-versatile"
+    model: "deepseek/deepseek-v3.2"
     prompt_file: "prompts/v3/extract_lineage_package.txt"
     temperature: 0.0
     max_tokens: 8000
@@ -69,7 +69,7 @@ actions:
 
   # Extracción Schema (DDL/SQL) - V3
   extract_schema:
-    model: "llama-3.3-70b-versatile"
+    model: "deepseek/deepseek-v3.2"
     prompt_file: "prompts/v3/extract_schema.txt"
     temperature: 0.0
     max_tokens: 4096
@@ -78,7 +78,7 @@ actions:
 
   # Extracción Lineage SQL (DML) - V3 Alias
   extract_lineage_sql:
-    model: "llama-3.3-70b-versatile"
+    model: "deepseek/deepseek-v3.2"
     prompt_file: "prompts/extract_sql.txt"
     temperature: 0.0
     max_tokens: 4096
@@ -88,23 +88,25 @@ actions:
 # Cadenas de fallback (usando modelos más pequeños de Groq si el grande falla o timeout)
 fallbacks:
   extract_strict:
-    - model: "llama-3.1-8b-instant"
+    - model: "google/gemini-2.5-flash-lite"
       prompt_file: "prompts/extract_strict.txt"
       temperature: 0.0
       max_tokens: 4096
       timeout_ms: 30000
-      description: "Fallback: Llama 8B Instant"
+      description: "Fallback: Gemini 2.5 Flash Lite"
 
   extract_sql:
-    - model: "llama-3.1-8b-instant"
+    - model: "google/gemini-2.5-flash-lite"
       prompt_file: "prompts/extract_sql.txt"
       temperature: 0.0
       max_tokens: 4096
       timeout_ms: 30000
-      description: "Fallback: Llama 8B Instant"
+      description: "Fallback: Gemini 2.5 Flash Lite"
 
 # Configuración de costos aproximados (USD por 1K tokens)
 cost_estimates:
+  "deepseek/deepseek-v3.2": 0.0003
+  "google/gemini-2.5-flash-lite": 0.0001
   "llama-3.3-70b-versatile": 0.00059
   "llama-3.1-8b-instant": 0.00005
   "mistralai/devstral-2512:free": 0.0

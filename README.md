@@ -1,23 +1,21 @@
-# Nexus Discovery Platform (v3.1)
+# DiggerAI Platform (v3.2)
 
-## Overview
-Nexus Discovery is a SaaS platform for automated reverse engineering of data code (SSIS, SQL, Python) using Generative AI. It extracts data lineage, creates documentation, and visualizes relationships in a Knowledge Graph.
+## 🚀 What's New in v3.2 (Hierarchical Intelligence)
+- **Hierarchical Graph Visualization**: Tasks and data flows are now encapsulated within **Package Containers** (e.g., SSIS Packages), reducing clutter and reflecting real-world structure.
+- **Visual Impact Analysis**: New "Impact Mode" allows users to select any asset and instantly visualize its downstream "blast radius" across the entire ecosystem.
+- **Persona-Based Perspectives**: Toggle between **Architect** (High-level business map) and **Engineer** (Deep technical logic) views.
+- **Professional PDF Reports**: Automated generation of professional discovery reports with asset inventories and executive summaries.
+- **Context Isolation**: Drill-down into specific packages to isolate their sub-graphs and focus on local logic.
 
-## 🚀 What's New in v3.1 (Plan-Driven Execution)
-- **Plan Review UI**: A new "Human-in-the-loop" step where users can review, approve, reorder, and categorize files before execution.
-- **Hybrid Parsing (SSIS/DataStage)**: Native XML parsing combined with LLM enrichment for accurate and cost-effective ETL extraction.
-- **Incremental Updates**: Reprocess solutions with "Full Clean" or "Incremental Update" modes to manage costs and history.
-- **Cost & Time Estimation**: Real-time estimates of Token usage, USD Cost, and Time for every file based on analysis strategy.
-- **Policy Engine**: Automatic exclusion of noise (e.g., `.git`, `node_modules`, binary files) to save tokens.
+## 🚀 Key Features (v3.1)
+- **Plan Review UI**: A "Human-in-the-loop" step to review, approve, and estimate costs before execution.
+- **Hybrid Parsing**: Native XML/Regex parsing combined with LLM enrichment for accurate and cost-effective ETL extraction.
+- **Incremental Updates**: Reprocess solutions with "Full Clean" or "Incremental Update" modes.
 
-## 🚀 Key Features (v2.0+)
-- **Advanced Pipeline Orchestrator**: A robust, stage-based engine (Ingest -> Plan -> Extract -> Persist).
-- **Deep Lineage Extraction**: "Senior Data Engineer" prompts for SQL, SSIS, and Python.
-- **Resilient AI Execution**: The `ActionRunner` handles Rate Limits and JSON errors with smart fallbacks (Llama 3 70B -> 8B).
-- **Universal Ingestion**: Support for ZIP File Uploads and Git Repositories.
-
-## Documentation
-- [Functional Specification](docs/FUNCTIONAL_SPEC.md)
+## 📖 Documentation
+- [Functional Specification](docs/FUNCTIONAL_SPEC.md) - *What the product does and its value.*
+- [Technical Architecture](docs/TECHNICAL_ARCHITECTURE.md) - *System components, data flow, and architecture.*
+- [User Manual](docs/USER_MANUAL.md) - *Step-by-step guide for discovery and analysis.*
 - [Roadmap & Known Issues](docs/ROADMAP.md)
 - [Release Notes](docs/RELEASE_NOTES.md)
 - [Database Schema](docs/DATABASE_SCHEMA.md)

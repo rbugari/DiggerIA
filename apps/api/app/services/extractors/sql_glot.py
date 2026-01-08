@@ -1,13 +1,28 @@
 import os
 import uuid
 import re
-import sqlglot
-from sqlglot import exp
+
+try:
+    import sqlglot
+    from sqlglot import exp
+    SQLGLOT_AVAILABLE = True
+except ImportError:
+    SQLGLOT_AVAILABLE = False
+    sqlglot = None
+    exp = None
+
 from .base import BaseExtractor
-from ...models.extraction import ExtractionResult, ExtractedNode, ExtractedEdge, Evidence, Locator
+from app.models.extraction import ExtractionResult, ExtractedNode, ExtractedEdge, Evidence, Locator
 
 class SqlGlotExtractor(BaseExtractor):
     def extract(self, file_path: str, content: str) -> ExtractionResult:
+        if not SQLGLOT_AVAILABLE:
+            print(f"[WARN] SqlGlotExtractor called but sqlglot package is missing.")
+            return ExtractionResult(
+                meta={"source_file": file_path, "error": "sqlglot_missing"},
+                nodes=[], edges=[], evidences=[], assumptions=[]
+            )
+
         nodes = []
         edges = []
         evidences = []

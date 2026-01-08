@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     
     # OpenRouter / OpenAI
     OPENAI_API_KEY: str = ""
+    OPENROUTER_API_KEY: str = ""
     OPENROUTER_MODEL: str = "deepseek/deepseek-v3.2"
     
     # Groq

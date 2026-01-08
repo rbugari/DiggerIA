@@ -1,4 +1,4 @@
--- Nexus Discovery Platform - PostgreSQL Schema
+-- DiggerAI Platform - PostgreSQL Schema
 
 -- 1. Organizations (Tenant Root)
 CREATE TABLE IF NOT EXISTS organizations (

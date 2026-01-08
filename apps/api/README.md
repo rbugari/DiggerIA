@@ -1,6 +1,6 @@
-# Nexus Discovery API & Worker (v2.0)
+# DiggerAI API & Worker (v2.0)
 
-This directory contains the FastAPI backend and the Asynchronous Worker for the Nexus Discovery Platform.
+This directory contains the FastAPI backend and the Asynchronous Worker for the DiggerAI Platform.
 
 ## Architecture
 

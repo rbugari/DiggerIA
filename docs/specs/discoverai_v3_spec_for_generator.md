@@ -1,4 +1,4 @@
-# DiscoverAI v3.0 — Spec de implementación (para generador de código)
+# DiggerAI v3.0 — Spec de implementación (para generador de código)
 
 > Objetivo: evolucionar v2 (pipeline “Ingest → Enumerate → Extract → Persist”) hacia v3 con **Planificación previa**, **priorización por valor/riesgo**, **control de orden por el usuario**, **estimación de coste/tiempo**, y **ejecución guiada por plan**, manteniendo la persistencia en Supabase como fuente de verdad y el grafo como *vista* / derivado.
 

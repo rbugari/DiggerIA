@@ -1,6 +1,6 @@
 # Database Schema & Entity Relationship Diagram (DER)
 
-Este documento describe el esquema actual de la base de datos de **Nexus Discovery Platform**.
+Este documento describe el esquema actual de la base de datos de **DiggerAI Platform**.
 
 ## Diagrama Entidad-Relación (Mermaid)
 

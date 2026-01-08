@@ -15,15 +15,6 @@ class CatalogService:
         node_id_map = {} # Map local node_id to UUID
         
         for node in result.nodes:
-            # Check if asset exists by canonical name? 
-            # For now, generate a UUID or use a stable hash?
-            # MD says: "asset_id uuid pk". "Reutilizar asset_id como ID estable".
-            
-            # Simple deduplication strategy: project_id + name + type
-            # We will use upsert based on name/type if possible, but asset_id is PK.
-            # Supabase upsert requires ON CONFLICT.
-            # If we don't have a unique constraint on (project_id, name, type), upsert won't work easily without fetching.
-            
             # Let's try to find existing asset
             existing = self.supabase.table("asset")\
                 .select("asset_id")\
@@ -57,15 +48,20 @@ class CatalogService:
                 
             node_id_map[node.node_id] = asset_id
             
-            # Asset Version? (Skip for MVP/Release A, stick to Asset)
-            
+        # 1.5. Resolve Parent IDs to UUIDs (Second Pass)
+        for node in result.nodes:
+            if node.parent_node_id and node.parent_node_id in node_id_map:
+                parent_uuid = node_id_map[node.parent_node_id]
+                asset_id = node_id_map[node.node_id]
+                
+                # Update the actual parent_asset_id column for true hierarchy
+                self.supabase.table("asset").update({
+                    "parent_asset_id": parent_uuid
+                }).eq("asset_id", asset_id).execute()
+
         # 2. Evidences
         evidence_id_map = {}
         for ev in result.evidences:
-            # Check if evidence exists (hash + file + project)? 
-            # For now, simplistic check or just insert (assuming 'Update' might want history)
-            # But to avoid duplicates on re-run, we should check.
-            # Using hash if available
             existing_ev = None
             if ev.hash:
                 existing_ev = self.supabase.table("evidence")\
@@ -135,10 +131,6 @@ class CatalogService:
             # Edge Evidence Link
             for ref in edge.evidence_refs:
                 if ref in evidence_id_map:
-                    # Check link existence to avoid PK violation if (edge_id, evidence_id) is PK
-                    # Assuming edge_evidence has no ID or composite PK.
-                    # Best effort: delete and re-insert or ignore error.
-                    # Or check first.
                     ev_uuid = evidence_id_map[ref]
                     try:
                         self.supabase.table("edge_evidence").insert({
@@ -149,4 +141,3 @@ class CatalogService:
                         pass # Ignore duplicate link error
                     
         return node_id_map
-

@@ -18,15 +18,16 @@ class Evidence(BaseModel):
 
 class ExtractedNode(BaseModel):
     node_id: str
-    node_type: str = Field(..., description="table|view|file|api|process|package|task|script")
+    node_type: str = Field(..., description="table|view|file|api|process|package|task|script|container|source|sink|transform")
     name: str
     system: str = Field(..., description="sqlserver|files|api|unknown")
     parent_node_id: Optional[str] = Field(None, description="ID of the parent node (e.g. Package ID for a Task)")
     attributes: Dict[str, Any] = Field(default_factory=dict)
+    columns_metadata: List[Dict[str, Any]] = Field(default_factory=dict)
 
 class ExtractedEdge(BaseModel):
     edge_id: str
-    edge_type: str = Field(..., description="READS_FROM|WRITES_TO|DEPENDS_ON|CALLS_API|CONTAINS")
+    edge_type: str = Field(..., description="READS_FROM|WRITES_TO|DEPENDS_ON|CALLS_API|CONTAINS|FLOWS_TO")
     from_node_id: str
     to_node_id: str
     confidence: float

@@ -1,0 +1,50 @@
+<?xml version="1.0"?>
+<DTS:Executable xmlns:DTS="www.microsoft.com/SqlServer/Dts" DTS:ObjectName="TestLogicPackage">
+  <DTS:Executables>
+    <DTS:Executable DTS:ObjectName="MyDataFlowTask" DTS:ExecutableType="Microsoft.Pipeline">
+      <DTS:ObjectData>
+        <pipeline version="1">
+          <components>
+            <component refId="Package\DFT\Source" componentClassID="Microsoft.OLEDBSource" name="SourceTable">
+              <properties>
+                <property name="OpenRowset">[dbo].[RawCustomers]</property>
+              </properties>
+            </component>
+            <component refId="Package\DFT\DerivedColumn" componentClassID="Microsoft.DerivedColumn" name="CleanseNames">
+              <inputs>
+                <input refId="Package\DFT\DerivedColumn.Inputs[Input]" name="Input">
+                  <inputColumns>
+                    <inputColumn refId="Package\DFT\DerivedColumn.Inputs[Input].Columns[FirstName]" name="FirstName" />
+                    <inputColumn refId="Package\DFT\DerivedColumn.Inputs[Input].Columns[LastName]" name="LastName" />
+                    <inputColumn refId="Package\DFT\DerivedColumn.Inputs[Input].Columns[DeactivationDate]" name="DeactivationDate" />
+                  </inputColumns>
+                </input>
+              </inputs>
+              <outputs>
+                <output refId="Package\DFT\DerivedColumn.Outputs[Output]" name="Output">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT\DerivedColumn.Outputs[Output].Columns[FullName]" name="FullName">
+                      <properties>
+                        <property name="Expression">(DT_WSTR, 101)(UPPER(TRIM(FirstName)) + " " + UPPER(TRIM(LastName)))</property>
+                        <property name="FriendlyExpression">UPPER(TRIM(FirstName)) + " " + UPPER(TRIM(LastName))</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT\DerivedColumn.Outputs[Output].Columns[IsActive]" name="IsActive">
+                      <properties>
+                        <property name="Expression">(DT_BOOL)(ISNULL(DeactivationDate) ? 1 : 0)</property>
+                        <property name="FriendlyExpression">ISNULL(DeactivationDate) ? 1 : 0</property>
+                      </properties>
+                    </outputColumn>
+                  </outputColumns>
+                </output>
+              </outputs>
+            </component>
+          </components>
+          <paths>
+            <path refId="Package\DFT.Paths[SourceToDerived]" startId="Package\DFT\Source.Outputs[Output]" endId="Package\DFT\DerivedColumn.Inputs[Input]" />
+          </paths>
+        </pipeline>
+      </DTS:ObjectData>
+    </DTS:Executable>
+  </DTS:Executables>
+</DTS:Executable>

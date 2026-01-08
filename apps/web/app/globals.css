@@ -1,81 +1,135 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
-    --radius: 0.5rem;
+:root {
+  --background: 0 0% 100%;
+  --foreground: 222.2 84% 4.9%;
+  --card: 0 0% 98%;
+  --card-foreground: 222.2 84% 4.9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222.2 84% 4.9%;
+  --primary: 25 100% 50%;
+  /* Tredence Orange */
+  --primary-foreground: 0 0% 100%;
+  --secondary: 267 100% 66%;
+  /* AI Purple */
+  --secondary-foreground: 0 0% 100%;
+  --muted: 210 40% 96.1%;
+  --muted-foreground: 215.4 16.3% 46.9%;
+  --accent: 210 40% 96.1%;
+  --accent-foreground: 222.2 47.4% 11.2%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 214.3 31.8% 91.4%;
+  --input: 214.3 31.8% 91.4%;
+  --ring: 25 100% 50%;
+  --radius: 0.75rem;
 
-    /* Graph Node Colors (Light) */
-    --node-pipeline-bg: #f3e8ff; --node-pipeline-border: #9333ea;
-    --node-script-bg: #e0f2fe; --node-script-border: #0284c7;
-    --node-table-bg: #dcfce7; --node-table-border: #16a34a;
-    --node-db-bg: #ffedd5; --node-db-border: #ea580c;
-    --node-package-bg: #fee2e2; --node-package-border: #ef4444;
-    --node-default-bg: #f3f4f6; --node-default-border: #9ca3af;
-    --node-text: #000000;
-    --graph-bg: #ffffff;
-    --graph-dots: #aaaaaa;
-  }
- 
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
-
-    /* Graph Node Colors (Dark) */
-    --node-pipeline-bg: #3b0764; --node-pipeline-border: #a855f7;
-    --node-script-bg: #0c4a6e; --node-script-border: #38bdf8;
-    --node-table-bg: #064e3b; --node-table-border: #4ade80;
-    --node-db-bg: #7c2d12; --node-db-border: #fb923c;
-    --node-package-bg: #7f1d1d; --node-package-border: #f87171;
-    --node-default-bg: #1f2937; --node-default-border: #9ca3af;
-    --node-text: #ffffff;
-    --graph-bg: #020817; /* matches zinc-950 roughly */
-    --graph-dots: #334155;
-  }
+  /* Graph Node Colors (Light) */
+  --node-pipeline-bg: #f3e8ff;
+  --node-pipeline-border: #a154ff;
+  --node-script-bg: #fff7ed;
+  --node-script-border: #ff6b00;
+  --node-table-bg: #dcfce7;
+  --node-table-border: #22c55e;
+  --node-db-bg: #eff6ff;
+  --node-db-border: #3b82f6;
+  --node-package-bg: #fee2e2;
+  --node-package-border: #ef4444;
+  --node-default-bg: #f3f4f6;
+  --node-default-border: #9ca3af;
+  --node-text: #0f1115;
+  --graph-bg: #ffffff;
+  --graph-dots: #e2e8f0;
 }
- 
+
+.dark {
+  --background: 220 17% 6%;
+  /* Deep Void */
+  --foreground: 210 40% 98%;
+  --card: 219 15% 12%;
+  /* Gunmetal */
+  --card-foreground: 210 40% 98%;
+  --popover: 220 17% 6%;
+  --popover-foreground: 210 40% 98%;
+  --primary: 25 100% 50%;
+  /* Tredence Orange */
+  --primary-foreground: 0 0% 100%;
+  --secondary: 267 100% 66%;
+  /* AI Purple */
+  --secondary-foreground: 210 40% 98%;
+  --muted: 219 15% 16%;
+  --muted-foreground: 215 20.2% 65.1%;
+  --accent: 219 15% 16%;
+  --accent-foreground: 210 40% 98%;
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 220 17% 20%;
+  --input: 220 17% 20%;
+  --ring: 25 100% 50%;
+
+  /* Graph Node Colors (Dark) */
+  --node-pipeline-bg: #2e1065;
+  --node-pipeline-border: #a154ff;
+  --node-script-bg: #431407;
+  --node-script-border: #ff6b00;
+  --node-table-bg: #064e3b;
+  --node-table-border: #22c55e;
+  --node-db-bg: #1e3a8a;
+  --node-db-border: #3b82f6;
+  --node-package-bg: #7f1d1d;
+  --node-package-border: #ef4444;
+  --node-default-bg: #1f2937;
+  --node-default-border: #9ca3af;
+  --node-text: #ffffff;
+  --graph-bg: #0f1115;
+  --graph-dots: #1e293b;
+}
+
 @layer base {
   * {
     @apply border-border;
   }
+
+  html,
   body {
-    @apply bg-background text-foreground;
+    background-color: hsl(var(--background)) !important;
+    color: hsl(var(--foreground)) !important;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  html,
+  body {
+    @apply font-sans min-h-full antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-display font-medium tracking-tight;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-card/80 backdrop-blur-md border border-white/10 shadow-xl;
+  }
+
+  .neon-glow-orange {
+    @apply shadow-[0_0_15px_#ff6b004d] hover:shadow-[0_0_25px_#ff6b0080] transition-shadow duration-300;
+  }
+
+  .neon-glow-purple {
+    @apply shadow-[0_0_15px_#a154ff4d] hover:shadow-[0_0_25px_#a154ff80] transition-shadow duration-300;
+  }
+
+  .btn-pill {
+    @apply rounded-full px-6 py-2 font-medium transition-all transform hover:scale-105 active:scale-95;
   }
 }

@@ -29,9 +29,11 @@ class LLMAdapter:
     def _get_openrouter_client(self):
         if not self.openai_client:
             from openai import OpenAI
+            # Favor specific OpenRouter key if available
+            key = settings.OPENROUTER_API_KEY or settings.OPENAI_API_KEY
             self.openai_client = OpenAI(
                 base_url="https://openrouter.ai/api/v1",
-                api_key=settings.OPENAI_API_KEY,
+                api_key=key,
             )
         return self.openai_client
 
@@ -113,8 +115,8 @@ class LLMAdapter:
             
             completion = client.chat.completions.create(
                 extra_headers={
-                    "HTTP-Referer": "https://discoveria.app", 
-                    "X-Title": "DiscoverIA",
+                    "HTTP-Referer": "https://diggerai.app", 
+                    "X-Title": "DiggerAI",
                 },
                 model=model,
                 messages=messages,

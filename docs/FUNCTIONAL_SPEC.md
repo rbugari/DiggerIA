@@ -1,72 +1,65 @@
-# Nexus Discovery - Functional Specification (v1.0)
+# DiggerAI - Functional Specification (v3.2)
 
 ## 1. Executive Summary
-**Nexus Discovery** is an AI-powered Reverse Engineering & Data Lineage platform designed to accelerate the understanding, documentation, and migration of complex data ecosystems. 
+**DiggerAI** is an AI-powered Reverse Engineering & Data Lineage platform designed to accelerate the understanding, documentation, and migration of complex data ecosystems. 
 
-By leveraging Generative AI (LLMs) and Graph Database technology, Nexus Discovery transforms opaque legacy code (SQL, SSIS, Python) into interactive, navigable intelligence. This tool addresses the critical business challenge of "Data Knowledge Debt"—where the logic of critical business processes is locked inside code files that no one fully understands.
+By leveraging Generative AI (LLMs) and Graph Database technology, DiggerAI transforms opaque legacy code (SQL, SSIS, Python) into interactive, navigable intelligence. This tool addresses the critical business challenge of "Data Knowledge Debt"—where the logic of critical business processes is locked inside code files that no one fully understands.
 
 ## 2. Business Value Proposition
 *   **Accelerate Cloud Migrations:** Reduce the "Assessment & Planning" phase of migration projects by 40-60% by automatically mapping existing dependencies.
-*   **Reduce Onboarding Time:** Enable new Data Engineers to understand years of legacy development in minutes through interactive visual graphs and natural language summaries.
-*   **Mitigate Operational Risk:** Visualize upstream and downstream dependencies to prevent breaking changes during refactoring.
-*   **Automate Documentation:** Replace stale, manual documentation with a living, AI-generated knowledge base that updates with the code.
+*   **Deep Logic Extraction:** Automatically translate legacy SSIS formulas and SQL scripts into modern dbt/SQL logic.
+*   **Zero-Downtime Impact Analysis:** Visualize the "blast radius" of schema changes before they happen.
+*   **Automate Documentation:** Replace stale, manual documentation with a living, AI-generated knowledge base and professional PDF reports.
 
 ## 3. Target Audience
-*   **Data Architects:** For high-level system design and migration planning.
-*   **Migration Engineers:** To deconstruct legacy ETL pipelines (e.g., SSIS) and re-implement them in modern platforms (e.g., Databricks, dbt).
-*   **Data Stewards/Governance Officers:** To discover data flows and ensure compliance.
+*   **Data Architects:** For high-level system design, migration planning, and impact analysis.
+*   **Data Engineers:** To deconstruct legacy ETL pipelines and debug complex logic field-by-field.
+*   **Data Governance Officers:** To maintain an automated, auditable catalog of assets and lineage.
 
-## 4. Key Features (Release v1.0)
+## 4. Key Features (Release v3.2)
 
-### 4.1. Intelligent Code Ingestion
-*   **Multi-Format Support:** Natively parses and analyzes:
-    *   **SSIS Packages (.dtsx):** Extracts data flow tasks, sources, and destinations from complex XML structures.
-    *   **SQL Scripts (.sql):** Parses DDL (Create Table) and DML (Select/Insert) to understand table structures and transformations.
-    *   **Python/PySpark (.py):** Analyzes dataframes and API calls to map code-based data movement.
-*   **Zip & Git Integration:** Users can upload local ZIP archives or provide Git repository URLs for analysis.
+### 4.1. Intelligent Code Ingestion & Planning
+*   **Multi-Format Support:** Natively parses and analyzes SSIS (.dtsx), SQL (.sql), and Python/PySpark (.py).
+*   **Interactive Planning Phase:** Users can review, categorize, and prioritize files before the heavy AI analysis begins, ensuring cost control and focus.
 
-### 4.2. Automated Data Lineage Graph
-*   **Visual Dependency Mapping:** Automatically constructs a directed graph showing the flow of data:
-    *   `Source Table` -> `ETL Process` -> `Target Table`
-*   **Auto-Layout:** Uses intelligent layout algorithms (DAG) to organize complex pipelines into readable, left-to-right flows.
-*   **Node Classification:** Visually distinguishes between Tables, Pipelines, Scripts, and APIs using color-coded nodes.
+### 4.2. Advanced Hierarchical Lineage Graph
+*   **Hierarchical Visualization (Containers):** Complex packages (like SSIS) are rendered as nested containers, logically grouping internal tasks and data flows.
+*   **Auto-Layout & Context Isolation:** Intelligent DAG layout ensures readability. Users can "Drill-Down" into a specific package to isolate its internal logic.
+*   **Persona-Based Perspectives:**
+    *   **Architect View:** High-level "Map" showing only critical data assets (Tables, Views) and their macro-connections.
+    *   **Engineer View:** Low-level "Circuit Diagram" showing every script, transformation, and logic block.
 
-### 4.3. AI-Powered Metadata & Documentation
-*   **Automated Summaries:** Every node in the graph includes a concise, AI-generated summary explaining *what* the code does in plain English.
-*   **Schema Extraction:** Automatically extracts column names and data types from source code where available, creating a preliminary Data Dictionary without accessing the production database.
-*   **Contextual Navigation:** Users can navigate the graph via an interactive side panel, jumping between upstream inputs and downstream outputs.
+### 4.3. Visual Impact Analysis
+*   **Blast Radius Discovery:** Select any node to instantly highlight all downstream dependencies (tables, reports, scripts) affected by a potential change.
+*   **Animated Highlighting:** Affected paths are visually separated from the rest of the graph for maximum clarity.
 
-### 4.4. "Chat with Data" Assistant (RAG)
-*   **Context-Aware Q&A:** An embedded AI assistant that understands the specific graph topology.
-*   **Natural Language Queries:** Users can ask complex questions like:
-    *   *"Which pipelines read from the Employee table?"*
-    *   *"What is the transformation logic in the Sales_ETL script?"*
-    *   *"List all tables modified by the Finance workflow."*
+### 4.4. AI-Powered Deep Metadata
+*   **Automated Summaries:** AI-generated "Senior Engineer" summaries for every node.
+*   **Logic Translator:** Automatically translate obscure SSIS expressions or SQL fragments into human-readable SQL or dbt code.
+*   **Schema & Column Lineage:** Traces individual fields from source to destination.
 
-### 4.5. Governance & Export
-*   **Project Isolation:** Secure workspaces ensure data from different projects (e.g., "Marketing Migration" vs "Finance Audit") never mixes.
-*   **CSV Export:** Full export capability for offline analysis or integration with other documentation tools.
+### 4.5. Professional Reporting & Export
+*   **PDF Solution Report:** Professional, multi-page audit report including executive summaries, component distributions, and full asset inventories.
+*   **CSV Data Export:** Full metadata export for offline analysis or external governance tools.
 
 ## 5. Use Cases
 
 ### Case A: The "Black Box" Migration
-**Scenario:** A retailer needs to migrate 500 SSIS packages to Databricks. The original developers left years ago.
-**Solution:** The team uploads the SSIS ZIP to Nexus Discovery. Within minutes, they have a visual map of all data flows. They identify that only 50 tables are critical for the migration, prioritizing effort and identifying redundant pipelines immediately.
+**Scenario:** A retailer needs to migrate 500 SSIS packages to Databricks.
+**Solution:** Using **Hierarchical Visualization**, the team identifies the exact tasks inside the packages that handle the core logic. They use the **Logic Translator** to generate dbt code directly from the SSIS formulas, saving hundreds of hours of manual rewriting.
 
-### Case B: Impact Analysis
-**Scenario:** A DBA needs to change the schema of the `DimCustomer` table but fears breaking downstream reports.
-**Solution:** Using the Graph View, the DBA selects `DimCustomer` and instantly sees 3 ETL scripts and 2 Reporting Views that depend on it. They can now plan the schema change with zero unexpected downtime.
+### Case B: Preventive Impact Analysis
+**Scenario:** A data steward needs to rename a core customer table.
+**Solution:** They enable **Impact Mode**, click the table, and instantly see three downstream ETL containers and two financial reports that will break. They generate a **PDF Report** of the impact list to coordinate with the downstream teams.
 
-### Case C: New Hire Onboarding
-**Scenario:** A new Senior Engineer joins the team and asks, "How does our data warehouse get populated?"
-**Solution:** Instead of reading thousands of lines of code, they spend 15 minutes exploring the Nexus Discovery graph, using the "Chat" feature to ask high-level architectural questions.
+### Case C: Business vs technical Onboarding
+**Scenario:** A Project Manager wants to understand the warehouse without seeing the code.
+**Solution:** They switch to **Architect Perspective**. The technical "noise" disappears, and they are left with a clean map of how data moves between business entities.
 
 ## 6. Design Objectives
-1.  **Zero-Config:** No need to connect to live databases or configure connection strings. The analysis is static and safe, running purely on source code.
-2.  **Visual First:** Complex dependencies are abstracted into intuitive visual flows.
-3.  **Explainable:** Every edge and node in the graph is backed by AI explanation, removing ambiguity.
+1.  **Transparency:** Every visual relationship is backed by source code evidence.
+2.  **Scalability:** From single scripts to entire enterprise repositories.
+3.  **Human-in-the-Loop:** Users govern the analysis plan and depth to manage costs.
 
-## 7. Future Roadmap (Preview)
-*   **Enterprise Sync:** Integration with Microsoft Purview and Databricks Unity Catalog.
-*   **Column-Level Lineage:** Deep tracing of individual fields through transformations.
-*   **Compliance Reporting:** Automated generation of PDF audit reports.
+---
+*Generated by DiggerAI Documentation Engine v3.2*
