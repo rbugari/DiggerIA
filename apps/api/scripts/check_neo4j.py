@@ -17,7 +17,7 @@ try:
     
     # Test a simple query
     with driver.session() as session:
-        result = session.run("RETURN 'Hello Nexus' AS message")
+        result = session.run("RETURN 'Hello DiggerAI' AS message")
         msg = result.single()["message"]
         print(f"Database says: {msg}")
         

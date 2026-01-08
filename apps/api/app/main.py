@@ -142,7 +142,7 @@ async def get_solution_report(solution_id: str):
             content=pdf_bytes,
             media_type="application/pdf",
             headers={
-                "Content-Disposition": f"attachment; filename=Nexus_Discovery_Report_{solution_id[:8]}.pdf"
+                "Content-Disposition": f"attachment; filename=DiggerAI_Report_{solution_id[:8]}.pdf"
             }
         )
     except Exception as e:

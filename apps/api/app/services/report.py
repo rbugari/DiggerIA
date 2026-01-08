@@ -132,67 +132,91 @@ class ReportService:
             pdf.set_text_color(55, 65, 81)
             
             pdf.set_font('helvetica', 'B', 9)
-            pdf.set_fill_color(249, 250, 251)
-            pdf.cell(100, 7, "Name", border=1, fill=True)
-            pdf.cell(90, 7, "Schema / System", border=1, fill=True, ln=True)
+            pdf.set_fill_color(229, 231, 235) # Gray-200 for header
+            pdf.cell(100, 8, "Name", border=1, fill=True)
+            pdf.cell(90, 8, "Schema / System", border=1, fill=True, ln=True)
             
-            pdf.set_font('helvetica', '', 8)
+            pdf.set_font('helvetica', '', 9)
+            row_count = 0
             for tn in sorted(type_nodes, key=lambda x: x["data"].get("label", "")):
                 label = tn["data"].get("label", "N/A")
                 schema = tn["data"].get("schema") or tn["data"].get("system") or "N/A"
                 columns = tn["data"].get("columns", [])
                 
+                # Zebra striping
+                fill = row_count % 2 == 1
+                if fill:
+                    pdf.set_fill_color(249, 250, 251) # Gray-50
+                
                 # Truncate long labels
                 if len(label) > 60: label = label[:57] + "..."
                 
-                pdf.cell(100, 6, self._safe_str(label), border=1)
-                pdf.cell(90, 6, self._safe_str(schema), border=1, ln=True)
+                pdf.cell(100, 8, self._safe_str(label), border='LR', fill=fill)
+                pdf.cell(90, 8, self._safe_str(schema), border='LR', fill=fill, ln=True)
                 
                 # Add columns if they exist (indented)
                 if columns:
-                    pdf.set_font('helvetica', 'I', 7)
+                    pdf.set_font('helvetica', 'I', 8)
                     pdf.set_text_color(107, 114, 128)
-                    col_str = "Columns: " + ", ".join(columns[:15]) # Limit to 15 to avoid massive blocks
-                    if len(columns) > 15: col_str += f" ... (+{len(columns)-15} more)"
-                    pdf.multi_cell(0, 5, self._safe_str("    " + col_str), border='LRB')
-                    pdf.set_font('helvetica', '', 8)
+                    col_str = "Columns: " + ", ".join(columns[:20]) # Limit to 20
+                    if len(columns) > 20: col_str += f" ... (+{len(columns)-20} more)"
+                    pdf.multi_cell(0, 6, self._safe_str("    " + col_str), border='LR', fill=fill)
+                    pdf.set_font('helvetica', '', 9)
                     pdf.set_text_color(55, 65, 81)
+                
+                # Bottom border for the last element of the group or every row to close it
+                pdf.cell(190, 0, '', border='T', ln=True)
+                row_count += 1
+                
             pdf.ln(5)
 
         # Transformations Section
         if transform_nodes:
             pdf.add_page()
-            pdf.set_font('helvetica', 'B', 14)
-            pdf.cell(0, 10, "Logic Transformation Catalog", ln=True)
-            pdf.set_font('helvetica', '', 10)
-            pdf.multi_cell(0, 6, "The following logical expressions were extracted from the ETL pipeline.")
-            pdf.ln(5)
+            pdf.set_font('helvetica', 'B', 16)
+            pdf.set_text_color(17, 24, 39)
+            pdf.cell(0, 12, "Logic Transformation Catalog", ln=True)
+            pdf.set_font('helvetica', '', 11)
+            pdf.set_text_color(75, 85, 99)
+            pdf.multi_cell(0, 7, "The following logical transformations were successfully extracted from the pipeline nodes.")
+            pdf.ln(8)
 
             for tn in transform_nodes:
                 tags = tn["data"].get("tags", {})
                 logic = tags.get("transformations", []) or []
                 if not logic: continue
 
-                # Check if we should start a new page
-                if pdf.get_y() > 250: pdf.add_page()
-
-                pdf.set_font('helvetica', 'B', 11)
-                pdf.set_fill_color(243, 244, 246)
-                pdf.cell(0, 8, f"Node: {tn['data'].get('label', tn['id'])}", ln=True, fill=True)
-                pdf.ln(2)
-
+                # Header for the node
+                pdf.set_font('helvetica', 'B', 12)
+                pdf.set_fill_color(243, 244, 246) # Gray-100
+                pdf.set_text_color(31, 41, 55)
+                
+                # Page break check
+                if pdf.get_y() > 230: pdf.add_page()
+                
+                pdf.cell(0, 10, f" Source Node: {tn['data'].get('label', tn['id'])}", border=1, ln=True, fill=True)
+                
                 for item in logic:
                     col = item.get("column", "N/A")
                     expr = item.get("expression", "N/A")
                     
+                    # Ensure room for the expression block
+                    if pdf.get_y() > 250: pdf.add_page()
+                    
                     pdf.set_font('helvetica', 'B', 10)
-                    pdf.cell(0, 6, self._safe_str(f"Column: {col}"), ln=True)
+                    pdf.set_text_color(37, 99, 235)
+                    pdf.cell(0, 8, f" Target Column: {col}", border='LR', ln=True)
+                    
+                    # Expression box
                     pdf.set_font('courier', '', 9)
-                    pdf.set_text_color(37, 99, 235) # Blue-600
-                    pdf.multi_cell(0, 5, self._safe_str(expr))
-                    pdf.set_text_color(55, 65, 81)
-                    pdf.ln(3)
-                pdf.ln(5)
+                    pdf.set_text_color(31, 41, 55)
+                    pdf.set_fill_color(255, 255, 255)
+                    # We use a multi_cell for the expression
+                    current_y = pdf.get_y()
+                    pdf.multi_cell(0, 5, self._safe_str(expr), border='LRB')
+                    pdf.ln(4)
+                
+                pdf.ln(6)
 
         print(f"[REPORT SERVICE] PDF generation complete. Returning bytes.")
-        return pdf.output()
+        return bytes(pdf.output())
